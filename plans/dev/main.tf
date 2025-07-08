@@ -20,3 +20,20 @@ module "lakehouse" {
     environment         = "dev"
   }
 }
+
+module "data_assets" {
+  source                     = "../../modules/data_assets"
+  subscription_id            = "1ab862af-7c5d-4085-ae0b-af6407432de5"
+  unity_catalog_metastore_id = "f1c9c23b-ff07-4982-97a8-dfe8b3696412"
+  app_name                   = "px-lakehouse"
+  env                        = "d"
+  catalog_name               = "dev"
+  catalog_owner              = "bas.hilgers@outlook.com"
+  storage_account_name       = module.lakehouse.storage_account_name
+  storage_account_id         = module.lakehouse.storage_account_id
+  access_connector_name      = "px-lakehouse-uc-dbr-connector"
+  access_connector_id        = "4cf1f221-1d2f-4537-bca6-8c8d07a35095"
+  providers = {
+    databricks = databricks.workspace
+  }
+}

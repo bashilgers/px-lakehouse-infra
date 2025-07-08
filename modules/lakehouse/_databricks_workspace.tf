@@ -97,7 +97,7 @@ resource "azurerm_databricks_workspace" "px_databricks_workspace" {
     public_subnet_name                                   = azurerm_subnet.px_subnet_public.name
     private_subnet_network_security_group_association_id = azurerm_subnet_network_security_group_association.px_subnet_private_nsg.id
     public_subnet_network_security_group_association_id  = azurerm_subnet_network_security_group_association.px_subnet_public_nsg.id
-    storage_account_name                                 = replace("${var.app_name}-${var.env}-dbfs", "-", "")
+    storage_account_name                                 = replace("${var.app_name}-${var.env}-dbfs", "-", "")  # ??? can this be pointed to the onelake?
     storage_account_sku_name                             = "Standard_LRS"  
   }
 
