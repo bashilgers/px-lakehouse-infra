@@ -13,4 +13,34 @@ resource "azurerm_storage_account" "px_storage_account" {
   tags                     = var.tags
 }
 
-# TODO containers
+# ===================================================================
+# Create Storage Containers
+# ===================================================================
+
+# Add landing zone container
+resource "azurerm_storage_container" "container_landing" {
+  name                  = "landing"
+  storage_account_id    = azurerm_storage_account.px_storage_account.id
+  container_access_type = "private"
+}
+
+# Add bronze zone container
+resource "azurerm_storage_container" "container_bronze" {
+  name                  = "bronze"
+  storage_account_id    = azurerm_storage_account.px_storage_account.id
+  container_access_type = "private"
+}
+
+# Add silver zone container
+resource "azurerm_storage_container" "container_silver" {
+  name                  = "silver"
+  storage_account_id    = azurerm_storage_account.px_storage_account.id
+  container_access_type = "private"
+}
+
+# Add gold zone container
+resource "azurerm_storage_container" "container_gold" {
+  name                  = "gold"
+  storage_account_id    = azurerm_storage_account.px_storage_account.id
+  container_access_type = "private"
+}
