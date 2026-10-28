@@ -16,39 +16,21 @@ resource "azuread_service_principal" "px_sp" {
 
 
 # ===================================================================
-# Add Service Principle as Owner to all Subscriptions
+# No Directory or Subscription Roles
 # ===================================================================
+# The service principle is the run-as identity of the Databricks jobs, and the
+# SQL connection logs in with its secret from key vault, so whoever can read
+# that secret acts as it. It was Global Administrator and Owner of every
+# subscription; it has no Azure roles now.
 
-# Add service principle as global AD administrator
-resource "azuread_directory_role" "global_admin" {
-  display_name = "Global Administrator"
-}
+# An activated directory role can't be deactivated, so the Global
+# Administrator role is only dropped from the state
+removed {
+  from = azuread_directory_role.global_admin
 
-resource "azuread_directory_role_assignment" "global_admin" {
-  role_id             = azuread_directory_role.global_admin.template_id
-  principal_object_id = azuread_service_principal.px_sp.object_id
-}
-
-# Add service principle as subscription owner
-resource "azurerm_role_assignment" "sp_contributor_dev" {
-  provider             = azurerm.azurerm_dev
-  scope                = "/subscriptions/${var.subscription_id_dev}"
-  role_definition_name = "Owner"
-  principal_id         = azuread_service_principal.px_sp.object_id
-}
-
-resource "azurerm_role_assignment" "sp_contributor_test" {
-  provider             = azurerm.azurerm_test
-  scope                = "/subscriptions/${var.subscription_id_test}"
-  role_definition_name = "Owner"
-  principal_id         = azuread_service_principal.px_sp.object_id
-}
-
-resource "azurerm_role_assignment" "sp_contributor_prod" {
-  provider             = azurerm.azurerm_prod
-  scope                = "/subscriptions/${var.subscription_id_prod}"
-  role_definition_name = "Owner"
-  principal_id         = azuread_service_principal.px_sp.object_id
+  lifecycle {
+    destroy = false
+  }
 }
 
 
