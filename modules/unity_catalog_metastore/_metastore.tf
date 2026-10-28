@@ -4,6 +4,8 @@ resource "databricks_metastore" "uc_metastore" {
   name         = "${var.app_name}-dbr-metastore"
   region       = azurerm_resource_group.uc_rg.location
   storage_root = format("abfss://%s@%s.dfs.core.windows.net/", azurerm_storage_container.uc_storage_account.name, azurerm_storage_account.uc_storage_account.name)
+  # Owned by a humans-only group, whose members are the metastore admins
+  owner = var.metastore_admins_group_name
 
   lifecycle {
     # Set outside this resource: the root credential is the access connector
