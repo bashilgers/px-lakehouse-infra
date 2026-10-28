@@ -32,6 +32,16 @@ variable "databricks_account_id" {
   description = "Databricks Account ID"
 }
 
+variable "workspace_host" {
+  type        = string
+  description = "URL of a workspace attached to the metastore, through which metastore grants are made"
+}
+
+variable "admins_group_name" {
+  type        = string
+  description = "Name of the account group that administers Unity Catalog objects"
+}
+
 # ===================================================================
 # Service Principles
 # ===================================================================

@@ -20,8 +20,8 @@ resource "azurerm_storage_container" "uc_storage_account" {
 locals {
   # Steps 2-4 in https://learn.microsoft.com/en-us/azure/databricks/data-governance/unity-catalog/azure-managed-identities#--step-2-grant-the-managed-identity-access-to-the-storage-account
   uc_roles = [
-    "Storage Blob Data Contributor",   # for normal data access
-    "Storage Queue Data Contributor",  # for file arrival triggers
+    "Storage Blob Data Contributor",  # for normal data access
+    "Storage Queue Data Contributor", # for file arrival triggers
     "EventGrid EventSubscription Contributor",
   ]
 }

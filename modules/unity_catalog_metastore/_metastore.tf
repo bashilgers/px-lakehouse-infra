@@ -5,6 +5,12 @@ resource "databricks_metastore" "uc_metastore" {
   region        = azurerm_resource_group.uc_rg.location
   force_destroy = true
   storage_root  = format("abfss://%s@%s.dfs.core.windows.net/", azurerm_storage_container.uc_storage_account.name, azurerm_storage_account.uc_storage_account.name)
+
+  lifecycle {
+    # Set outside this resource: the root credential is the access connector
+    # below, and the token lifetime is left at the account's default
+    ignore_changes = [storage_root_credential_name, delta_sharing_recipient_token_lifetime_in_seconds]
+  }
 }
 
 # Create connector for metastore to access data
@@ -15,8 +21,8 @@ resource "azurerm_databricks_access_connector" "uc_access_connector" {
   identity {
     type = "SystemAssigned"
   }
-  tags = var.tags
-  depends_on = [ databricks_metastore.uc_metastore ]
+  tags       = var.tags
+  depends_on = [databricks_metastore.uc_metastore]
 }
 
 # Provide access to the access connector that will be assumed by Unity Catalog to access data
@@ -27,6 +33,5 @@ resource "databricks_metastore_data_access" "uc_access_connector_data_access" {
   azure_managed_identity {
     access_connector_id = azurerm_databricks_access_connector.uc_access_connector.id
   }
-  is_default    = true
-  force_destroy = true
+  is_default = true
 }
