@@ -75,6 +75,11 @@ variable "public_subnet_address_prefixes" {
   description = "Address space for public Databricks subnet"
 }
 
+variable "private_endpoint_subnet_address_prefixes" {
+  type        = list(string)
+  description = "Address space for private endpoint subnet"
+}
+
 variable "service_endpoints" {
   type        = list(string)
   description = "Service endpoints to associate with subnets"
@@ -84,4 +89,23 @@ variable "service_endpoints" {
     "Microsoft.AzureActiveDirectory",
     "Microsoft.Sql"
   ]
+}
+
+# ===================================================================
+# Azure SQL
+# ===================================================================
+
+variable "sql_location" {
+  type        = string
+  description = "The location of Azure Data center for the SQL server (westeurope refuses new SQL servers)"
+}
+
+variable "sql_entra_admin_login" {
+  type        = string
+  description = "Login name of the Entra ID user that administers the SQL server"
+}
+
+variable "sql_entra_admin_object_id" {
+  type        = string
+  description = "Object ID of the Entra ID user that administers the SQL server"
 }
