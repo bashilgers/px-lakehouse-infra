@@ -24,6 +24,18 @@ resource "azurerm_storage_container" "container_landing" {
   container_access_type = "private"
 }
 
+# Add catalog container, the managed storage of the environment's catalog (px-lakehouse-data)
+resource "azurerm_storage_container" "container_catalog" {
+  name                  = "catalog"
+  storage_account_id    = azurerm_storage_account.px_storage_account.id
+  container_access_type = "private"
+
+  # Holds every managed table of the environment
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 # Add bronze zone container
 resource "azurerm_storage_container" "container_bronze" {
   name                  = "bronze"
