@@ -76,3 +76,11 @@ resource "azurerm_private_endpoint" "px_sql_private_endpoint" {
     private_dns_zone_ids = [azurerm_private_dns_zone.px_private_dns_zone_sql.id]
   }
 }
+
+# Create private endpoint rule from serverless compute to sql server
+resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_sql_private_endpoint_rule" {
+  provider                       = databricks.account
+  network_connectivity_config_id = databricks_mws_network_connectivity_config.px_ncc.network_connectivity_config_id
+  resource_id                    = azurerm_mssql_server.px_sql_server.id
+  group_id                       = "sqlServer"
+}

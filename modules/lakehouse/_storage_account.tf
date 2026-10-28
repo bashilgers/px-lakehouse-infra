@@ -44,3 +44,23 @@ resource "azurerm_storage_container" "container_gold" {
   storage_account_id    = azurerm_storage_account.px_storage_account.id
   container_access_type = "private"
 }
+
+# ===================================================================
+# Serverless Access to Storage Account
+# ===================================================================
+
+# Create private endpoint rule from serverless compute to storage account (dfs)
+resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_storage_dfs_private_endpoint_rule" {
+  provider                       = databricks.account
+  network_connectivity_config_id = databricks_mws_network_connectivity_config.px_ncc.network_connectivity_config_id
+  resource_id                    = azurerm_storage_account.px_storage_account.id
+  group_id                       = "dfs"
+}
+
+# Create private endpoint rule from serverless compute to storage account (blob)
+resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_storage_blob_private_endpoint_rule" {
+  provider                       = databricks.account
+  network_connectivity_config_id = databricks_mws_network_connectivity_config.px_ncc.network_connectivity_config_id
+  resource_id                    = azurerm_storage_account.px_storage_account.id
+  group_id                       = "blob"
+}
