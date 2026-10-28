@@ -64,3 +64,33 @@ resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_storage_blob_private
   resource_id                    = azurerm_storage_account.px_storage_account.id
   group_id                       = "blob"
 }
+
+# ===================================================================
+# Unity Catalog File Events
+# ===================================================================
+# File events on the external locations need the access connector to set up
+# storage queues and event grid subscriptions for this storage account.
+
+# Let access connector configure the storage account's event setup
+resource "azurerm_role_assignment" "px_access_connector_storage_account_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Account Contributor"
+  principal_id         = var.access_connector_principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Let access connector read and write the storage queues
+resource "azurerm_role_assignment" "px_access_connector_storage_queue_data_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = var.access_connector_principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Let access connector create event grid subscriptions in the resource group
+resource "azurerm_role_assignment" "px_access_connector_eventgrid_subscription_contributor" {
+  scope                = azurerm_resource_group.px_rg.id
+  role_definition_name = "EventGrid EventSubscription Contributor"
+  principal_id         = var.access_connector_principal_id
+  principal_type       = "ServicePrincipal"
+}

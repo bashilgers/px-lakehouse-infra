@@ -42,6 +42,11 @@ variable "unity_catalog_metastore_id" {
   description = "The ID of Unity Catalog metastore"
 }
 
+variable "access_connector_principal_id" {
+  type        = string
+  description = "Principal ID of the Unity Catalog access connector's managed identity"
+}
+
 # ===================================================================
 # Service Principles
 # ===================================================================
