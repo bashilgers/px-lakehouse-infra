@@ -97,6 +97,20 @@ variable "service_endpoints" {
 }
 
 # ===================================================================
+# Key Vault
+# ===================================================================
+
+variable "key_vault_admin_object_id" {
+  type        = string
+  description = "Object ID of the Entra ID user that manages the key vault's secrets"
+}
+
+variable "azure_databricks_object_id" {
+  type        = string
+  description = "Object ID of the AzureDatabricks enterprise application (app ID 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d) in the tenant"
+}
+
+# ===================================================================
 # Azure SQL
 # ===================================================================
 
