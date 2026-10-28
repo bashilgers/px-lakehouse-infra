@@ -66,6 +66,18 @@ resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_storage_blob_private
 }
 
 # ===================================================================
+# Unity Catalog Data Access
+# ===================================================================
+
+# Let access connector read and write the data, for the external locations on this storage account
+resource "azurerm_role_assignment" "px_access_connector_storage_blob_data_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = var.access_connector_principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# ===================================================================
 # Unity Catalog File Events
 # ===================================================================
 # File events on the external locations need the access connector to set up

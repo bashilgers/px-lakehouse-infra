@@ -16,8 +16,3 @@ terraform {
     use_azuread_auth     = true
   }
 }
-
-provider "databricks" {
-  alias = "workspace"
-  host  = module.lakehouse.workspace_url
-}
