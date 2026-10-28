@@ -14,14 +14,9 @@ resource "azuread_service_principal" "px_sp" {
   app_role_assignment_required = false
 }
 
-# Create password secret for service principle
-resource "azuread_service_principal_password" "px_sp" {
-  service_principal_id = azuread_service_principal.px_sp.id
-}
-
 
 # ===================================================================
-# Add Service Principle as Contributor to all Subscriptions
+# Add Service Principle as Owner to all Subscriptions
 # ===================================================================
 
 # Add service principle as global AD administrator
@@ -34,25 +29,25 @@ resource "azuread_directory_role_assignment" "global_admin" {
   principal_object_id = azuread_service_principal.px_sp.object_id
 }
 
-# Add service principle as subscription contributor
+# Add service principle as subscription owner
 resource "azurerm_role_assignment" "sp_contributor_dev" {
   provider             = azurerm.azurerm_dev
   scope                = "/subscriptions/${var.subscription_id_dev}"
-  role_definition_name = "Contributor"
+  role_definition_name = "Owner"
   principal_id         = azuread_service_principal.px_sp.object_id
 }
 
 resource "azurerm_role_assignment" "sp_contributor_test" {
   provider             = azurerm.azurerm_test
   scope                = "/subscriptions/${var.subscription_id_test}"
-  role_definition_name = "Contributor"
+  role_definition_name = "Owner"
   principal_id         = azuread_service_principal.px_sp.object_id
 }
 
 resource "azurerm_role_assignment" "sp_contributor_prod" {
   provider             = azurerm.azurerm_prod
   scope                = "/subscriptions/${var.subscription_id_prod}"
-  role_definition_name = "Contributor"
+  role_definition_name = "Owner"
   principal_id         = azuread_service_principal.px_sp.object_id
 }
 

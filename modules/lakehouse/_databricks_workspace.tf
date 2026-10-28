@@ -113,3 +113,151 @@ resource "databricks_metastore_assignment" "px_databricks_workspace_metastore" {
   metastore_id = var.unity_catalog_metastore_id
   workspace_id = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
 }
+
+# ===================================================================
+# Serverless Network Connectivity
+# ===================================================================
+# Serverless compute does not run in the vnet. It reaches the storage account,
+# key vault and sql server through private endpoint rules on this config, which
+# live next to each resource. Each rule stays PENDING until it is approved on
+# the target resource.
+
+# Create network connectivity config for serverless compute
+resource "databricks_mws_network_connectivity_config" "px_ncc" {
+  provider = databricks.account
+  name     = "${var.app_name}-${var.env}-ncc"
+  region   = azurerm_databricks_workspace.px_databricks_workspace.location
+}
+
+# Bind network connectivity config to workspace
+resource "databricks_mws_ncc_binding" "px_ncc_binding" {
+  provider                       = databricks.account
+  network_connectivity_config_id = databricks_mws_network_connectivity_config.px_ncc.network_connectivity_config_id
+  workspace_id                   = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+}
+
+# ===================================================================
+# Back-end Private Link for Databricks Workspace
+# ===================================================================
+# Clusters reach the control plane through this private endpoint instead of
+# the internet, which is what network_security_group_rules_required expects.
+
+# Create private dns zone for databricks
+resource "azurerm_private_dns_zone" "px_private_dns_zone_databricks" {
+  name                = "privatelink.azuredatabricks.net"
+  resource_group_name = azurerm_resource_group.px_rg.name
+  tags                = var.tags
+}
+
+# Link private dns zone to vnet
+resource "azurerm_private_dns_zone_virtual_network_link" "px_private_dns_zone_databricks_vnet_link" {
+  name                  = "${var.app_name}-${var.env}-vnet-databricks-link"
+  resource_group_name   = azurerm_resource_group.px_rg.name
+  private_dns_zone_name = azurerm_private_dns_zone.px_private_dns_zone_databricks.name
+  virtual_network_id    = azurerm_virtual_network.px_vnet.id
+  tags                  = var.tags
+}
+
+# Create back-end private endpoint for databricks workspace
+resource "azurerm_private_endpoint" "px_databricks_private_endpoint" {
+  name                          = "${var.app_name}-${var.env}-dbr-pe"
+  resource_group_name           = azurerm_resource_group.px_rg.name
+  location                      = azurerm_resource_group.px_rg.location
+  subnet_id                     = azurerm_subnet.px_subnet_private_endpoints.id
+  custom_network_interface_name = "${var.app_name}-${var.env}-dbr-pe-nic"
+  tags                          = var.tags
+
+  private_service_connection {
+    name                           = "${var.app_name}-${var.env}-dbr-psc"
+    private_connection_resource_id = azurerm_databricks_workspace.px_databricks_workspace.id
+    subresource_names              = ["databricks_ui_api"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "default"
+    private_dns_zone_ids = [azurerm_private_dns_zone.px_private_dns_zone_databricks.id]
+  }
+}
+
+# ===================================================================
+# Front-end Context-based Ingress for Databricks Workspace
+# ===================================================================
+# Managed at account level, so a wrong ip range can be fixed from anywhere
+# through the account api, even when the workspace itself denies you.
+
+# Look up the environment's CI deploy service principle (managed in user_management)
+data "databricks_service_principal" "px_deploy_sp" {
+  provider     = databricks.account
+  display_name = "${var.app_name}-${var.env}-deploy-sp"
+}
+
+# Create network policy that only lets listed ip addresses and the deploy
+# service principle reach the workspace
+resource "databricks_account_network_policy" "px_network_policy" {
+  provider          = databricks.account
+  account_id        = var.databricks_account_id
+  network_policy_id = "${var.app_name}-${var.env}-network-policy"
+
+  ingress = {
+    public_access = {
+      restriction_mode = "RESTRICTED_ACCESS"
+      allow_rules = [
+        {
+          label = "allowed-ip-addresses"
+          destination = {
+            all_destinations = true
+          }
+          origin = {
+            included_ip_ranges = {
+              ip_ranges = var.workspace_allowed_ip_addresses
+            }
+          }
+        },
+        {
+          # CI runs on GitHub-hosted runners without stable IPs, so the deploy
+          # service principle is allowed by identity, for the api only
+          label = "deploy-sp-api"
+          authentication = {
+            identity_type = "IDENTITY_TYPE_SELECTED_IDENTITIES"
+            identities = [
+              {
+                principal_id   = tonumber(data.databricks_service_principal.px_deploy_sp.id)
+                principal_type = "PRINCIPAL_TYPE_SERVICE_PRINCIPAL"
+              }
+            ]
+          }
+          destination = {
+            workspace_api = {
+              scopes          = ["all-apis"]
+              scope_qualifier = "API_SCOPE_QUALIFIER_ALL"
+            }
+          }
+          origin = {
+            all_ip_ranges = true
+          }
+        }
+      ]
+    }
+  }
+
+  # Leave serverless egress unrestricted, this policy only governs ingress
+  egress = {
+    network_access = {
+      restriction_mode = "FULL_ACCESS"
+      policy_enforcement = {
+        enforcement_mode = "ENFORCED"
+      }
+    }
+  }
+}
+
+# Attach network policy to workspace
+resource "databricks_workspace_network_option" "px_workspace_network_option" {
+  provider          = databricks.account
+  workspace_id      = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+  network_policy_id = databricks_account_network_policy.px_network_policy.network_policy_id
+
+  # Clusters must reach the control plane privately before public access is restricted
+  depends_on = [azurerm_private_endpoint.px_databricks_private_endpoint]
+}
