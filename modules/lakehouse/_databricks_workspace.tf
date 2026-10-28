@@ -189,6 +189,7 @@ resource "azurerm_private_endpoint" "px_databricks_private_endpoint" {
 # Create network policy that only lets listed ip addresses reach the workspace
 resource "databricks_account_network_policy" "px_network_policy" {
   provider          = databricks.account
+  account_id        = var.databricks_account_id
   network_policy_id = "${var.app_name}-${var.env}-network-policy"
 
   ingress = {
@@ -197,6 +198,9 @@ resource "databricks_account_network_policy" "px_network_policy" {
       allow_rules = [
         {
           label = "allowed-ip-addresses"
+          destination = {
+            all_destinations = true
+          }
           origin = {
             included_ip_ranges = {
               ip_ranges = var.workspace_allowed_ip_addresses
@@ -211,6 +215,9 @@ resource "databricks_account_network_policy" "px_network_policy" {
   egress = {
     network_access = {
       restriction_mode = "FULL_ACCESS"
+      policy_enforcement = {
+        enforcement_mode = "ENFORCED"
+      }
     }
   }
 }
