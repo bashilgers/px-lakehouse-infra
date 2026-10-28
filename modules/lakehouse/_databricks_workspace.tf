@@ -181,27 +181,46 @@ resource "azurerm_private_endpoint" "px_databricks_private_endpoint" {
 }
 
 # ===================================================================
-# Front-end IP Access List for Databricks Workspace
+# Front-end Context-based Ingress for Databricks Workspace
 # ===================================================================
+# Managed at account level, so a wrong ip range can be fixed from anywhere
+# through the account api, even when the workspace itself denies you.
 
-# Enable ip access lists on workspace
-resource "databricks_workspace_conf" "px_workspace_conf" {
-  provider = databricks.workspace
-  custom_config = {
-    "enableIpAccessLists" = true
+# Create network policy that only lets listed ip addresses reach the workspace
+resource "databricks_account_network_policy" "px_network_policy" {
+  provider          = databricks.account
+  network_policy_id = "${var.app_name}-${var.env}-network-policy"
+
+  ingress = {
+    public_access = {
+      restriction_mode = "RESTRICTED_ACCESS"
+      allow_rules = [
+        {
+          label = "allowed-ip-addresses"
+          origin = {
+            included_ip_ranges = {
+              ip_ranges = var.workspace_allowed_ip_addresses
+            }
+          }
+        }
+      ]
+    }
+  }
+
+  # Leave serverless egress unrestricted, this policy only governs ingress
+  egress = {
+    network_access = {
+      restriction_mode = "FULL_ACCESS"
+    }
   }
 }
 
-# Allow only listed ip addresses to reach the workspace ui and api
-resource "databricks_ip_access_list" "px_ip_access_list" {
-  provider     = databricks.workspace
-  label        = "allowed"
-  list_type    = "ALLOW"
-  ip_addresses = var.workspace_allowed_ip_addresses
+# Attach network policy to workspace
+resource "databricks_workspace_network_option" "px_workspace_network_option" {
+  provider          = databricks.account
+  workspace_id      = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+  network_policy_id = databricks_account_network_policy.px_network_policy.network_policy_id
 
   # Clusters must reach the control plane privately before public access is restricted
-  depends_on = [
-    databricks_workspace_conf.px_workspace_conf,
-    azurerm_private_endpoint.px_databricks_private_endpoint
-  ]
+  depends_on = [azurerm_private_endpoint.px_databricks_private_endpoint]
 }
