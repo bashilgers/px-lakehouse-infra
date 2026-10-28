@@ -229,7 +229,8 @@ resource "databricks_account_network_policy" "px_network_policy" {
           }
           destination = {
             workspace_api = {
-              scopes = ["all-apis"]
+              scopes          = ["all-apis"]
+              scope_qualifier = "API_SCOPE_QUALIFIER_ALL"
             }
           }
           origin = {
