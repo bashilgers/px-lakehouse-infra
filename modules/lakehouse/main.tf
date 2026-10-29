@@ -19,6 +19,11 @@ provider "databricks" {
   client_secret = var.azure_client_secret
 }
 
+provider "databricks" {
+  alias = "workspace"
+  host  = "https://${azurerm_databricks_workspace.px_databricks_workspace.workspace_url}"
+}
+
 provider "azurerm" {
   subscription_id = var.subscription_id
   features {}

@@ -48,6 +48,20 @@ variable "access_connector_principal_id" {
 }
 
 # ===================================================================
+# Unity Catalog
+# ===================================================================
+
+variable "admins_group_name" {
+  type        = string
+  description = "Name of the account group that administers Unity Catalog objects"
+}
+
+variable "metastore_admins_group_name" {
+  type        = string
+  description = "Name of the humans-only account group that owns the metastore"
+}
+
+# ===================================================================
 # Service Principles
 # ===================================================================
 

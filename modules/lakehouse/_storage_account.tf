@@ -80,8 +80,9 @@ resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_storage_blob_private
 # ===================================================================
 # Unity Catalog Data Access
 # ===================================================================
-# The environment has its own access connector, so the storage credential on it
-# (px-lakehouse-data) reaches this storage account only.
+# The environment has its own access connector and storage credential, bound to
+# its workspace, so its external locations (px-lakehouse-data) reach this
+# storage account only.
 
 # Create access connector for the environment's storage credential
 resource "azurerm_databricks_access_connector" "px_dbr_connector" {
@@ -101,6 +102,36 @@ resource "azurerm_role_assignment" "px_dbr_connector_storage_blob_data_contribut
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_databricks_access_connector.px_dbr_connector.identity[0].principal_id
   principal_type       = "ServicePrincipal"
+}
+
+# Create storage credential on access connector, owned by the metastore admins
+# since whoever owns it can reach all data the access connector can
+resource "databricks_storage_credential" "px_storage_credential" {
+  provider       = databricks.workspace
+  name           = azurerm_databricks_access_connector.px_dbr_connector.name
+  owner          = var.metastore_admins_group_name
+  isolation_mode = "ISOLATION_MODE_ISOLATED"
+
+  azure_managed_identity {
+    access_connector_id = azurerm_databricks_access_connector.px_dbr_connector.id
+  }
+}
+
+# Bind storage credential to the environment's workspace only
+resource "databricks_workspace_binding" "px_storage_credential" {
+  provider       = databricks.workspace
+  securable_type = "storage_credential"
+  securable_name = databricks_storage_credential.px_storage_credential.name
+  workspace_id   = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+  binding_type   = "BINDING_TYPE_READ_WRITE"
+}
+
+# Let admin group create external locations on the storage credential
+resource "databricks_grant" "px_storage_credential_admins" {
+  provider           = databricks.workspace
+  storage_credential = databricks_storage_credential.px_storage_credential.id
+  principal          = var.admins_group_name
+  privileges         = ["CREATE_EXTERNAL_LOCATION"]
 }
 
 # ===================================================================
