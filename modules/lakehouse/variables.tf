@@ -53,7 +53,7 @@ variable "access_connector_principal_id" {
 
 variable "admins_group_name" {
   type        = string
-  description = "Name of the account group that administers Unity Catalog objects"
+  description = "Name of the environment's admin group, which owns its Unity Catalog objects (px-lakehouse-<env>-admins)"
 }
 
 variable "metastore_admins_group_name" {
