@@ -6,6 +6,8 @@ module "user_management" {
   subscription_id_prod  = "138f27a5-cb36-412c-a9f0-9b1ba69e0d55"
   databricks_account_id = "29c54faf-2e22-47d0-b2bb-f894c93010d2"
   admin_user_names      = ["bas.hilgers@outlook.com"]
+  # Entra ID object IDs: bas.hilgers@outlook.com
+  group_owner_object_ids = ["c0071a22-3f84-4337-ad09-871f52c3a1ba"]
   environments = {
     d = {
       workspace_id                 = 1721719261752680
