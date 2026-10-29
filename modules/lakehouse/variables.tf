@@ -42,11 +42,6 @@ variable "unity_catalog_metastore_id" {
   description = "The ID of Unity Catalog metastore"
 }
 
-variable "access_connector_principal_id" {
-  type        = string
-  description = "Principal ID of the metastore's shared access connector, which keeps its data role here until the old external locations are dropped"
-}
-
 # ===================================================================
 # Unity Catalog
 # ===================================================================
