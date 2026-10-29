@@ -126,7 +126,8 @@ resource "databricks_workspace_binding" "px_storage_credential" {
   binding_type   = "BINDING_TYPE_READ_WRITE"
 }
 
-# Let admin group create external locations on the storage credential
+# Let the environment's admin group, owner of its external locations (px-lakehouse-data),
+# create external locations on the storage credential
 resource "databricks_grant" "px_storage_credential_admins" {
   provider           = databricks.workspace
   storage_credential = databricks_storage_credential.px_storage_credential.id
