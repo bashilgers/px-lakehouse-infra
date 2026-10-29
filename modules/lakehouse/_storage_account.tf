@@ -80,12 +80,26 @@ resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_storage_blob_private
 # ===================================================================
 # Unity Catalog Data Access
 # ===================================================================
+# The environment has its own access connector, so the storage credential on it
+# (px-lakehouse-data) reaches this storage account only.
+
+# Create access connector for the environment's storage credential
+resource "azurerm_databricks_access_connector" "px_dbr_connector" {
+  name                = "${var.app_name}-${var.env}-dbr-connector"
+  resource_group_name = azurerm_resource_group.px_rg.name
+  location            = azurerm_resource_group.px_rg.location
+  tags                = var.tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
 
 # Let access connector read and write the data, for the external locations on this storage account
-resource "azurerm_role_assignment" "px_access_connector_storage_blob_data_contributor" {
+resource "azurerm_role_assignment" "px_dbr_connector_storage_blob_data_contributor" {
   scope                = azurerm_storage_account.px_storage_account.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.access_connector_principal_id
+  principal_id         = azurerm_databricks_access_connector.px_dbr_connector.identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
 
@@ -96,6 +110,45 @@ resource "azurerm_role_assignment" "px_access_connector_storage_blob_data_contri
 # storage queues and event grid subscriptions for this storage account.
 
 # Let access connector configure the storage account's event setup
+resource "azurerm_role_assignment" "px_dbr_connector_storage_account_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Account Contributor"
+  principal_id         = azurerm_databricks_access_connector.px_dbr_connector.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Let access connector read and write the storage queues
+resource "azurerm_role_assignment" "px_dbr_connector_storage_queue_data_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_databricks_access_connector.px_dbr_connector.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Let access connector create event grid subscriptions in the resource group
+resource "azurerm_role_assignment" "px_dbr_connector_eventgrid_subscription_contributor" {
+  scope                = azurerm_resource_group.px_rg.id
+  role_definition_name = "EventGrid EventSubscription Contributor"
+  principal_id         = azurerm_databricks_access_connector.px_dbr_connector.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# ===================================================================
+# Shared Access Connector (being phased out)
+# ===================================================================
+# The metastore's access connector (unity_catalog_metastore) backs the external
+# locations until px-lakehouse-data moves them to the environment's storage
+# credential. Remove these, and access_connector_principal_id, after that.
+
+# Let shared access connector read and write the data
+resource "azurerm_role_assignment" "px_access_connector_storage_blob_data_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = var.access_connector_principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Let shared access connector configure the storage account's event setup
 resource "azurerm_role_assignment" "px_access_connector_storage_account_contributor" {
   scope                = azurerm_storage_account.px_storage_account.id
   role_definition_name = "Storage Account Contributor"
@@ -103,7 +156,7 @@ resource "azurerm_role_assignment" "px_access_connector_storage_account_contribu
   principal_type       = "ServicePrincipal"
 }
 
-# Let access connector read and write the storage queues
+# Let shared access connector read and write the storage queues
 resource "azurerm_role_assignment" "px_access_connector_storage_queue_data_contributor" {
   scope                = azurerm_storage_account.px_storage_account.id
   role_definition_name = "Storage Queue Data Contributor"
@@ -111,7 +164,7 @@ resource "azurerm_role_assignment" "px_access_connector_storage_queue_data_contr
   principal_type       = "ServicePrincipal"
 }
 
-# Let access connector create event grid subscriptions in the resource group
+# Let shared access connector create event grid subscriptions in the resource group
 resource "azurerm_role_assignment" "px_access_connector_eventgrid_subscription_contributor" {
   scope                = azurerm_resource_group.px_rg.id
   role_definition_name = "EventGrid EventSubscription Contributor"
