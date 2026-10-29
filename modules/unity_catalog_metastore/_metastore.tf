@@ -31,8 +31,9 @@ resource "databricks_metastore_data_access" "uc_access_connector_data_access" {
   provider     = databricks.account
   metastore_id = databricks_metastore.uc_metastore.id
   name         = azurerm_databricks_access_connector.uc_access_connector.name
-  # Owned by the admin group: whoever owns it can reach all data the access connector can
-  owner = var.admins_group_name
+  # Owned by the metastore admins, not a group with deploy service principles:
+  # whoever owns it can reach all data the access connector can
+  owner = var.metastore_admins_group_name
   azure_managed_identity {
     access_connector_id = azurerm_databricks_access_connector.uc_access_connector.id
   }

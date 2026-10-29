@@ -1,11 +1,15 @@
 # ===================================================================
-# Create Service Principle in App Registry
+# Create Service Principle in App Registry (retired)
 # ===================================================================
+# Was the bootstrap identity, then the run-as identity of the dev jobs; each
+# environment now has its own (_run_as_identities.tf). Kept because it owns
+# the system table provider in Databricks, which nobody can change. Once
+# px-lakehouse-data grants it nothing, it has no rights left.
 
 # Create app in app registry
 resource "azuread_application_registration" "px_sp" {
   display_name = "${var.app_name}-sp"
-  description  = "Master Service Principle for entire Data Platform"
+  description  = "Retired: owns the Databricks system table provider, no other rights"
 }
 
 # Grab client_id of app and create service principle
@@ -18,10 +22,9 @@ resource "azuread_service_principal" "px_sp" {
 # ===================================================================
 # No Directory or Subscription Roles
 # ===================================================================
-# The service principle is the run-as identity of the Databricks jobs, and the
-# SQL connection logs in with its secret from key vault, so whoever can read
-# that secret acts as it. It was Global Administrator and Owner of every
-# subscription; it has no Azure roles now.
+# It was Global Administrator and Owner of every subscription, while the SQL
+# connection logged in with its secret from key vault; it has no Azure roles
+# and no valid secret now.
 
 # An activated directory role can't be deactivated, so the Global
 # Administrator role is only dropped from the state
