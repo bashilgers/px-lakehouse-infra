@@ -38,3 +38,8 @@ variable "admin_user_names" {
   type        = list(string)
   description = "Databricks account users that are metastore admins and manage the run-as service principles"
 }
+
+variable "group_owner_object_ids" {
+  type        = list(string)
+  description = "Entra ID object IDs of the users who own the persona groups and manage their membership in Entra ID"
+}
