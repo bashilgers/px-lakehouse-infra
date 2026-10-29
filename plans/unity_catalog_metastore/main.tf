@@ -4,7 +4,6 @@ module "unity_catalog_metastore" {
   databricks_account_id       = "29c54faf-2e22-47d0-b2bb-f894c93010d2"
   workspace_host              = "https://adb-1721719261752680.0.azuredatabricks.net"
   env_admins_group_names      = ["px-lakehouse-d-admins"]
-  admins_group_name           = "px-lakehouse-admins"
   metastore_admins_group_name = "px-lakehouse-metastore-admins"
   azure_client_id             = var.azure_client_id
   azure_client_secret         = var.azure_client_secret

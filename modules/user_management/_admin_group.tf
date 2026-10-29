@@ -57,45 +57,6 @@ resource "databricks_mws_permission_assignment" "px_env_admins" {
 }
 
 # ===================================================================
-# Admin Group (being phased out)
-# ===================================================================
-# Owned what Terraform creates in Unity Catalog for every environment, with
-# every environment's deploy service principle as member. Kept until
-# px-lakehouse-data and the lakehouse module use the environment admin groups
-# above; then remove it, and its grants in unity_catalog_metastore.
-
-# Create admin group in databricks account
-resource "databricks_group" "px_admins" {
-  provider     = databricks.account
-  display_name = "${var.app_name}-admins"
-}
-
-# Add admin users to group
-resource "databricks_group_member" "px_admins_users" {
-  for_each  = toset(var.admin_user_names)
-  provider  = databricks.account
-  group_id  = databricks_group.px_admins.id
-  member_id = data.databricks_user.px_admins[each.key].id
-}
-
-# Add deploy service principles to group
-resource "databricks_group_member" "px_admins_deploy_sp" {
-  for_each  = var.environments
-  provider  = databricks.account
-  group_id  = databricks_group.px_admins.id
-  member_id = databricks_service_principal.px_deploy_sp[each.key].id
-}
-
-# Give admin group access to each environment's workspace
-resource "databricks_mws_permission_assignment" "px_admins" {
-  for_each     = var.environments
-  provider     = databricks.account
-  workspace_id = each.value.workspace_id
-  principal_id = databricks_group.px_admins.id
-  permissions  = ["USER"]
-}
-
-# ===================================================================
 # Metastore Admin Group
 # ===================================================================
 # Owns the metastore, which makes its members metastore admins. Humans only:
