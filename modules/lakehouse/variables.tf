@@ -44,7 +44,7 @@ variable "unity_catalog_metastore_id" {
 
 variable "access_connector_principal_id" {
   type        = string
-  description = "Principal ID of the metastore's shared access connector, which loses its roles here once the external locations use the environment's own"
+  description = "Principal ID of the metastore's shared access connector, which keeps its data role here until the old external locations are dropped"
 }
 
 # ===================================================================
