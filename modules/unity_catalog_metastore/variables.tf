@@ -42,11 +42,6 @@ variable "env_admins_group_names" {
   description = "Names of the environment admin groups, each owning its environment's Unity Catalog objects"
 }
 
-variable "admins_group_name" {
-  type        = string
-  description = "Name of the admin group of every environment, being phased out for the environment admin groups"
-}
-
 variable "metastore_admins_group_name" {
   type        = string
   description = "Name of the humans-only account group that owns the metastore"
