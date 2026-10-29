@@ -33,7 +33,7 @@ resource "databricks_grant" "uc_metastore_admins" {
 # dev external locations use until they move to the environment's own
 resource "databricks_grant" "uc_access_connector_admins" {
   provider           = databricks.workspace
-  storage_credential = databricks_metastore_data_access.uc_access_connector_data_access.name
+  storage_credential = databricks_storage_credential.uc_storage_credential.id
   principal          = var.admins_group_name
   privileges         = ["CREATE_EXTERNAL_LOCATION"]
 }

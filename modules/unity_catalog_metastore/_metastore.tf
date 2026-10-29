@@ -27,15 +27,22 @@ resource "azurerm_databricks_access_connector" "uc_access_connector" {
 }
 
 # Provide access to the access connector that will be assumed by Unity Catalog to access data
-resource "databricks_metastore_data_access" "uc_access_connector_data_access" {
-  provider     = databricks.account
-  metastore_id = databricks_metastore.uc_metastore.id
-  name         = azurerm_databricks_access_connector.uc_access_connector.name
+resource "databricks_storage_credential" "uc_storage_credential" {
+  provider = databricks.workspace
+  name     = azurerm_databricks_access_connector.uc_access_connector.name
   # Owned by the metastore admins, not a group with deploy service principles:
   # whoever owns it can reach all data the access connector can
   owner = var.metastore_admins_group_name
   azure_managed_identity {
     access_connector_id = azurerm_databricks_access_connector.uc_access_connector.id
   }
-  is_default = true
+}
+
+# Was a metastore data access, which can't be updated after it is created.
+# Forget it without deleting, it stays the metastore's root credential.
+removed {
+  from = databricks_metastore_data_access.uc_access_connector_data_access
+  lifecycle {
+    destroy = false
+  }
 }
