@@ -12,3 +12,8 @@ output "storage_account_id" {
   value       = azurerm_storage_account.px_storage_account.id
   description = "ID of the azure data lake storage account"
 }
+
+output "access_connector_id" {
+  value       = azurerm_databricks_access_connector.px_dbr_connector.id
+  description = "ID of the environment's access connector, for its storage credential"
+}
