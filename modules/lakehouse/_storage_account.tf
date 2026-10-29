@@ -167,38 +167,15 @@ resource "azurerm_role_assignment" "px_dbr_connector_eventgrid_subscription_cont
 # ===================================================================
 # Shared Access Connector (being phased out)
 # ===================================================================
-# The metastore's access connector (unity_catalog_metastore) backs the external
-# locations until px-lakehouse-data moves them to the environment's storage
-# credential. Remove these, and access_connector_principal_id, after that.
+# The metastore's access connector (unity_catalog_metastore) still backs the old
+# bronze, silver and gold external locations, which stay until the tables of the
+# dropped catalog dev are purged. Remove this, and access_connector_principal_id,
+# once they are dropped.
 
 # Let shared access connector read and write the data
 resource "azurerm_role_assignment" "px_access_connector_storage_blob_data_contributor" {
   scope                = azurerm_storage_account.px_storage_account.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.access_connector_principal_id
-  principal_type       = "ServicePrincipal"
-}
-
-# Let shared access connector configure the storage account's event setup
-resource "azurerm_role_assignment" "px_access_connector_storage_account_contributor" {
-  scope                = azurerm_storage_account.px_storage_account.id
-  role_definition_name = "Storage Account Contributor"
-  principal_id         = var.access_connector_principal_id
-  principal_type       = "ServicePrincipal"
-}
-
-# Let shared access connector read and write the storage queues
-resource "azurerm_role_assignment" "px_access_connector_storage_queue_data_contributor" {
-  scope                = azurerm_storage_account.px_storage_account.id
-  role_definition_name = "Storage Queue Data Contributor"
-  principal_id         = var.access_connector_principal_id
-  principal_type       = "ServicePrincipal"
-}
-
-# Let shared access connector create event grid subscriptions in the resource group
-resource "azurerm_role_assignment" "px_access_connector_eventgrid_subscription_contributor" {
-  scope                = azurerm_resource_group.px_rg.id
-  role_definition_name = "EventGrid EventSubscription Contributor"
   principal_id         = var.access_connector_principal_id
   principal_type       = "ServicePrincipal"
 }
