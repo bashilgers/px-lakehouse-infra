@@ -37,9 +37,14 @@ variable "workspace_host" {
   description = "URL of a workspace attached to the metastore, through which metastore grants are made"
 }
 
+variable "env_admins_group_names" {
+  type        = list(string)
+  description = "Names of the environment admin groups, each owning its environment's Unity Catalog objects"
+}
+
 variable "admins_group_name" {
   type        = string
-  description = "Name of the account group that administers Unity Catalog objects"
+  description = "Name of the admin group of every environment, being phased out for the environment admin groups"
 }
 
 variable "metastore_admins_group_name" {

@@ -2,7 +2,10 @@
 # Deploy Service Principles for CI (one per environment)
 # ===================================================================
 # GitHub Actions logs in as these through federated credentials, so there is
-# no secret to store or rotate.
+# no secret to store or rotate. Each is in its own environment's admin group
+# only. A pull request runs the workflow from its own branch, so only dev's
+# trusts pull requests; test's and prod's trust main and their GitHub
+# environment, which only main can deploy to.
 
 # Create app in app registry per environment
 resource "azuread_application_registration" "px_deploy_sp" {
@@ -37,11 +40,11 @@ resource "azuread_application_federated_identity_credential" "px_deploy_sp" {
   audiences      = ["api://AzureADTokenExchange"]
 }
 
-# Let deploy service principle read and write the terraform state
+# Let deploy service principle read and write its environment's terraform state only
 resource "azurerm_role_assignment" "px_deploy_sp_state" {
   for_each             = var.environments
   provider             = azurerm.azurerm_prod
-  scope                = var.terraform_state_container_id
+  scope                = each.value.terraform_state_container_id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azuread_service_principal.px_deploy_sp[each.key].object_id
 }
