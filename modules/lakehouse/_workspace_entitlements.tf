@@ -3,13 +3,15 @@
 # ===================================================================
 # The workspace's users group has no entitlements, so being assigned to the
 # workspace alone gives no access. The environment's persona groups
-# (user_management, assigned there) get their own: engineers the workspace and
-# Databricks SQL, readers Databricks SQL only.
+# (user_management, assigned there) get their own: engineers and support the
+# workspace and Databricks SQL, readers Databricks SQL only. Support needs the
+# workspace to follow job runs.
 
 locals {
   persona_entitlements = {
     engineers = { workspace_access = true, databricks_sql_access = true }
     readers   = { workspace_access = false, databricks_sql_access = true }
+    support   = { workspace_access = true, databricks_sql_access = true }
   }
 }
 
