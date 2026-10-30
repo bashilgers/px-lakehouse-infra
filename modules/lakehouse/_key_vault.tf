@@ -1,14 +1,18 @@
 # ===================================================================
 # Central KeyVault for Environment
 # ===================================================================
+# Access to the secrets goes through Azure RBAC, not access policies: with
+# access policies, whoever may change the key vault can give themselves its
+# secrets. Granting a role takes Owner or User Access Administrator.
 
-# Create basic keyvault resource
+# Create basic keyvault resource, with azure rbac for its data
 resource "azurerm_key_vault" "px_key_vault" {
   name                        = "${var.app_name}-${var.env}-kv"
   resource_group_name         = azurerm_resource_group.px_rg.name
   location                    = azurerm_resource_group.px_rg.location
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   enabled_for_disk_encryption = true
+  rbac_authorization_enabled  = true
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false
   sku_name                    = "standard"
@@ -22,11 +26,11 @@ data "azuread_group" "px_keyvault_managers" {
 }
 
 # Let the key vault managers manage secrets
-resource "azurerm_key_vault_access_policy" "px_key_vault_managers" {
-  key_vault_id       = azurerm_key_vault.px_key_vault.id
-  tenant_id          = data.azurerm_client_config.current.tenant_id
-  object_id          = data.azuread_group.px_keyvault_managers.object_id
-  secret_permissions = ["Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"]
+resource "azurerm_role_assignment" "px_key_vault_managers_secrets_officer" {
+  scope                = azurerm_key_vault.px_key_vault.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azuread_group.px_keyvault_managers.object_id
+  principal_type       = "Group"
 }
 
 # Let the key vault managers find the key vault in the azure portal
@@ -38,11 +42,11 @@ resource "azurerm_role_assignment" "px_key_vault_managers_reader" {
 }
 
 # Let databricks read secrets through key vault-backed secret scopes
-resource "azurerm_key_vault_access_policy" "px_key_vault_databricks" {
-  key_vault_id       = azurerm_key_vault.px_key_vault.id
-  tenant_id          = data.azurerm_client_config.current.tenant_id
-  object_id          = var.azure_databricks_object_id
-  secret_permissions = ["Get", "List"]
+resource "azurerm_role_assignment" "px_key_vault_databricks_secrets_user" {
+  scope                = azurerm_key_vault.px_key_vault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.azure_databricks_object_id
+  principal_type       = "ServicePrincipal"
 }
 
 # Create private endpoint rule from serverless compute to keyvault
