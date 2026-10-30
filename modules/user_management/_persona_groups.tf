@@ -3,11 +3,12 @@
 # ===================================================================
 # The people who use an environment's data get access through these groups,
 # never one by one: engineers build and run the pipelines, readers query the
-# gold layer. Their grants are in px-lakehouse-data. Membership is managed in
-# Entra ID, not here, and Databricks takes it from there through automatic
-# identity management. A new group is resolved into the Databricks account
-# once (databricks account iam-v2 resolve-group <object id>) before it can be
-# assigned or granted: for a new environment, apply the groups first
+# gold layer, support watches the loads. Their grants are in px-lakehouse-data.
+# Membership is managed in Entra ID, not here, and Databricks takes it from
+# there through automatic identity management. A new group is resolved into
+# the Databricks account once (databricks account iam-v2 resolve-group
+# <object id>) before it can be assigned or granted: for a new environment or
+# persona, apply the groups first
 # (-target=module.user_management.azuread_group.px_persona), resolve them, then
 # apply the rest.
 
@@ -15,6 +16,7 @@ locals {
   personas = {
     engineers = "Data engineers of %s: read all its data; in dev also create their own schemas"
     readers   = "Readers of %s: query its gold layer"
+    support   = "Support of %s: watch its loads through the run logs, landing files and bronze"
   }
 
   # One entry per environment and persona
