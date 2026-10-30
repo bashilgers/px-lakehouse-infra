@@ -1,14 +1,18 @@
 # ===================================================================
 # Central KeyVault for Environment
 # ===================================================================
+# Access to the secrets goes through Azure RBAC, not access policies: with
+# access policies, whoever may change the key vault can give themselves its
+# secrets. Granting a role takes Owner or User Access Administrator.
 
-# Create basic keyvault resource
+# Create basic keyvault resource, with azure rbac for its data
 resource "azurerm_key_vault" "px_key_vault" {
   name                        = "${var.app_name}-${var.env}-kv"
   resource_group_name         = azurerm_resource_group.px_rg.name
   location                    = azurerm_resource_group.px_rg.location
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   enabled_for_disk_encryption = true
+  rbac_authorization_enabled  = true
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false
   sku_name                    = "standard"
