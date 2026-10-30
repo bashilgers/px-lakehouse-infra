@@ -97,7 +97,7 @@ resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_sql_private_endpoint
 
 # Create access connector for the writes to the sql database
 resource "azurerm_databricks_access_connector" "px_sql_connector" {
-  name                = "${var.app_name}-${var.env}-sql-connector"
+  name                = "${var.app_name}-${var.env}-dbr-sqlsrv-connector"
   resource_group_name = azurerm_resource_group.px_rg.name
   location            = azurerm_resource_group.px_rg.location
   tags                = var.tags

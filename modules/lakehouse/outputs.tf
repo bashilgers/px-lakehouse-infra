@@ -13,12 +13,12 @@ output "storage_account_id" {
   description = "ID of the azure data lake storage account"
 }
 
-output "access_connector_id" {
-  value       = azurerm_databricks_access_connector.px_dbr_connector.id
-  description = "ID of the environment's access connector, for its storage credential"
+output "adls_connector_id" {
+  value       = azurerm_databricks_access_connector.px_dbr_adls_connector.id
+  description = "ID of the environment's dbr-adls-connector, for its storage credential"
 }
 
-output "sql_connector_principal_id" {
+output "sqlsrv_connector_principal_id" {
   value       = azurerm_databricks_access_connector.px_sql_connector.identity[0].principal_id
-  description = "Object ID of the SQL access connector's managed identity, for its user in the database"
+  description = "Object ID of the dbr-sqlsrv-connector's managed identity, for its user in the database"
 }

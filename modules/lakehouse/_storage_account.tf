@@ -91,11 +91,13 @@ resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_storage_queue_privat
 # ===================================================================
 # The environment has its own access connector and storage credential, bound to
 # its workspace, so its external locations (px-lakehouse-data) reach this
-# storage account only.
+# storage account only. Access connectors are named dbr-<what they reach>-connector:
+# dbr-adls-connector for this storage account, dbr-sqlsrv-connector for the sql
+# server (_sql_database.tf). Their credentials take the same name.
 
 # Create access connector for the environment's storage credential
-resource "azurerm_databricks_access_connector" "px_dbr_connector" {
-  name                = "${var.app_name}-${var.env}-dbr-connector"
+resource "azurerm_databricks_access_connector" "px_dbr_adls_connector" {
+  name                = "${var.app_name}-${var.env}-dbr-adls-connector"
   resource_group_name = azurerm_resource_group.px_rg.name
   location            = azurerm_resource_group.px_rg.location
   tags                = var.tags
@@ -106,40 +108,41 @@ resource "azurerm_databricks_access_connector" "px_dbr_connector" {
 }
 
 # Let access connector read and write the data, for the external locations on this storage account
-resource "azurerm_role_assignment" "px_dbr_connector_storage_blob_data_contributor" {
+resource "azurerm_role_assignment" "px_dbr_adls_connector_storage_blob_data_contributor" {
   scope                = azurerm_storage_account.px_storage_account.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_databricks_access_connector.px_dbr_connector.identity[0].principal_id
+  principal_id         = azurerm_databricks_access_connector.px_dbr_adls_connector.identity[0].principal_id
   principal_type       = "ServicePrincipal"
 }
 
 # Create storage credential on access connector, owned by the metastore admins
 # since whoever owns it can reach all data the access connector can
-resource "databricks_storage_credential" "px_storage_credential" {
+resource "databricks_storage_credential" "px_dbr_adls_credential" {
   provider       = databricks.workspace
-  name           = azurerm_databricks_access_connector.px_dbr_connector.name
+  name           = azurerm_databricks_access_connector.px_dbr_adls_connector.name
   owner          = var.metastore_admins_group_name
   isolation_mode = "ISOLATION_MODE_ISOLATED"
+  comment        = "Reads and writes ${azurerm_storage_account.px_storage_account.name}, for the external locations"
 
   azure_managed_identity {
-    access_connector_id = azurerm_databricks_access_connector.px_dbr_connector.id
+    access_connector_id = azurerm_databricks_access_connector.px_dbr_adls_connector.id
   }
 }
 
 # Bind storage credential to the environment's workspace only
-resource "databricks_workspace_binding" "px_storage_credential" {
+resource "databricks_workspace_binding" "px_dbr_adls_credential" {
   provider       = databricks.workspace
   securable_type = "storage_credential"
-  securable_name = databricks_storage_credential.px_storage_credential.name
+  securable_name = databricks_storage_credential.px_dbr_adls_credential.name
   workspace_id   = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
   binding_type   = "BINDING_TYPE_READ_WRITE"
 }
 
 # Let the environment's admin group, owner of its external locations (px-lakehouse-data),
 # create external locations on the storage credential
-resource "databricks_grant" "px_storage_credential_admins" {
+resource "databricks_grant" "px_dbr_adls_credential_admins" {
   provider           = databricks.workspace
-  storage_credential = databricks_storage_credential.px_storage_credential.id
+  storage_credential = databricks_storage_credential.px_dbr_adls_credential.id
   principal          = var.admins_group_name
   privileges         = ["CREATE_EXTERNAL_LOCATION"]
 }
@@ -151,6 +154,82 @@ resource "databricks_grant" "px_storage_credential_admins" {
 # storage queues and event grid subscriptions for this storage account.
 
 # Let access connector configure the storage account's event setup
+resource "azurerm_role_assignment" "px_dbr_adls_connector_storage_account_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Account Contributor"
+  principal_id         = azurerm_databricks_access_connector.px_dbr_adls_connector.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Let access connector read and write the storage queues
+resource "azurerm_role_assignment" "px_dbr_adls_connector_storage_queue_data_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_databricks_access_connector.px_dbr_adls_connector.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# Let access connector create event grid subscriptions in the resource group
+resource "azurerm_role_assignment" "px_dbr_adls_connector_eventgrid_subscription_contributor" {
+  scope                = azurerm_resource_group.px_rg.id
+  role_definition_name = "EventGrid EventSubscription Contributor"
+  principal_id         = azurerm_databricks_access_connector.px_dbr_adls_connector.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# ===================================================================
+# Old Access Connector
+# ===================================================================
+# px-lakehouse-<env>-dbr-connector, from before the naming rule above, with its
+# storage credential and roles. It goes once no external location uses it: in
+# dev, px-lakehouse-data's two (moved to dbr-adls-connector) and the hand-made
+# px-lakehouse-d-exloc-bronze, -silver and -gold (dropped after 2026-11-04).
+# Test and prod have none.
+
+resource "azurerm_databricks_access_connector" "px_dbr_connector" {
+  name                = "${var.app_name}-${var.env}-dbr-connector"
+  resource_group_name = azurerm_resource_group.px_rg.name
+  location            = azurerm_resource_group.px_rg.location
+  tags                = var.tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+resource "azurerm_role_assignment" "px_dbr_connector_storage_blob_data_contributor" {
+  scope                = azurerm_storage_account.px_storage_account.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_databricks_access_connector.px_dbr_connector.identity[0].principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+resource "databricks_storage_credential" "px_storage_credential" {
+  provider       = databricks.workspace
+  name           = azurerm_databricks_access_connector.px_dbr_connector.name
+  owner          = var.metastore_admins_group_name
+  isolation_mode = "ISOLATION_MODE_ISOLATED"
+
+  azure_managed_identity {
+    access_connector_id = azurerm_databricks_access_connector.px_dbr_connector.id
+  }
+}
+
+resource "databricks_workspace_binding" "px_storage_credential" {
+  provider       = databricks.workspace
+  securable_type = "storage_credential"
+  securable_name = databricks_storage_credential.px_storage_credential.name
+  workspace_id   = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+  binding_type   = "BINDING_TYPE_READ_WRITE"
+}
+
+resource "databricks_grant" "px_storage_credential_admins" {
+  provider           = databricks.workspace
+  storage_credential = databricks_storage_credential.px_storage_credential.id
+  principal          = var.admins_group_name
+  privileges         = ["CREATE_EXTERNAL_LOCATION"]
+}
+
 resource "azurerm_role_assignment" "px_dbr_connector_storage_account_contributor" {
   scope                = azurerm_storage_account.px_storage_account.id
   role_definition_name = "Storage Account Contributor"
@@ -158,7 +237,6 @@ resource "azurerm_role_assignment" "px_dbr_connector_storage_account_contributor
   principal_type       = "ServicePrincipal"
 }
 
-# Let access connector read and write the storage queues
 resource "azurerm_role_assignment" "px_dbr_connector_storage_queue_data_contributor" {
   scope                = azurerm_storage_account.px_storage_account.id
   role_definition_name = "Storage Queue Data Contributor"
@@ -166,7 +244,6 @@ resource "azurerm_role_assignment" "px_dbr_connector_storage_queue_data_contribu
   principal_type       = "ServicePrincipal"
 }
 
-# Let access connector create event grid subscriptions in the resource group
 resource "azurerm_role_assignment" "px_dbr_connector_eventgrid_subscription_contributor" {
   scope                = azurerm_resource_group.px_rg.id
   role_definition_name = "EventGrid EventSubscription Contributor"
