@@ -15,12 +15,26 @@ resource "azurerm_key_vault" "px_key_vault" {
   tags                        = var.tags
 }
 
-# Let the key vault admin manage secrets
-resource "azurerm_key_vault_access_policy" "px_key_vault_admin" {
+# Look up key vault managers group in entra id (user_management)
+data "azuread_group" "px_keyvault_managers" {
+  display_name     = "${var.app_name}-${var.env}-keyvault-managers"
+  security_enabled = true
+}
+
+# Let the key vault managers manage secrets
+resource "azurerm_key_vault_access_policy" "px_key_vault_managers" {
   key_vault_id       = azurerm_key_vault.px_key_vault.id
   tenant_id          = data.azurerm_client_config.current.tenant_id
-  object_id          = var.key_vault_admin_object_id
+  object_id          = data.azuread_group.px_keyvault_managers.object_id
   secret_permissions = ["Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"]
+}
+
+# Let the key vault managers find the key vault in the azure portal
+resource "azurerm_role_assignment" "px_key_vault_managers_reader" {
+  scope                = azurerm_key_vault.px_key_vault.id
+  role_definition_name = "Reader"
+  principal_id         = data.azuread_group.px_keyvault_managers.object_id
+  principal_type       = "Group"
 }
 
 # Let databricks read secrets through key vault-backed secret scopes

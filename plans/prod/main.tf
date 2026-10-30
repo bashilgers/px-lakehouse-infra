@@ -15,7 +15,6 @@ module "lakehouse" {
   sql_location                             = "germanywestcentral"
   sql_entra_admin_login                    = "bas.hilgers@outlook.com"
   sql_entra_admin_object_id                = "c0071a22-3f84-4337-ad09-871f52c3a1ba"
-  key_vault_admin_object_id                = "c0071a22-3f84-4337-ad09-871f52c3a1ba"
   azure_databricks_object_id               = "78477c4b-9331-4168-8644-5d13b5e5a7de"
   admins_group_name                        = "px-lakehouse-p-admins"
   metastore_admins_group_name              = "px-lakehouse-metastore-admins"
