@@ -15,7 +15,10 @@ locals {
   }
 }
 
-# Look up persona group in the workspace, where user_management assigned it
+# Look up persona group in the workspace, where user_management assigned it.
+# For a new environment that means: apply its workspace and metastore
+# assignment first (-target), then user_management with the workspace's ID,
+# then the rest of this plan.
 data "databricks_group" "px_persona" {
   for_each     = local.persona_entitlements
   provider     = databricks.workspace

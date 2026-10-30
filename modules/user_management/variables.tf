@@ -25,9 +25,9 @@ variable "databricks_account_id" {
 
 variable "environments" {
   type = map(object({
-    workspace_id                 = number
-    admin_user_names             = list(string) # members of the environment's admin group, beside its deploy service principle
-    terraform_state_container_id = string       # only this environment's state, as its deploy service principle can write all of it
+    workspace_id                 = optional(number) # null until the environment's lakehouse plan has created it
+    admin_user_names             = list(string)     # members of the environment's admin group, beside its deploy service principle
+    terraform_state_container_id = optional(string) # only this environment's state, as its deploy service principle can write all of it; null for none yet
     github_repository            = string
     github_subjects              = map(string) # federated credential name => subject
   }))
