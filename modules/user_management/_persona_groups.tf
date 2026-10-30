@@ -5,8 +5,11 @@
 # never one by one: engineers build and run the pipelines, readers query the
 # gold layer. Their grants are in px-lakehouse-data. Membership is managed in
 # Entra ID, not here, and Databricks takes it from there through automatic
-# identity management; resolve a new group into the Databricks account once
-# (databricks account iam-v2 resolve-group <object id>) before granting it.
+# identity management. A new group is resolved into the Databricks account
+# once (databricks account iam-v2 resolve-group <object id>) before it can be
+# assigned or granted: for a new environment, apply the groups first
+# (-target=module.user_management.azuread_group.px_persona), resolve them, then
+# apply the rest.
 
 locals {
   personas = {
@@ -34,4 +37,21 @@ resource "azuread_group" "px_persona" {
   lifecycle {
     ignore_changes = [members]
   }
+}
+
+# Look up persona group in databricks account, once resolved from entra id
+data "databricks_group" "px_persona" {
+  for_each     = local.env_personas
+  provider     = databricks.account
+  display_name = azuread_group.px_persona[each.key].display_name
+}
+
+# Give persona group access to its environment's workspace. The workspace's
+# users group has no entitlements, so each group gets its own (lakehouse).
+resource "databricks_mws_permission_assignment" "px_persona" {
+  for_each     = local.env_personas
+  provider     = databricks.account
+  workspace_id = var.environments[each.value.env].workspace_id
+  principal_id = data.databricks_group.px_persona[each.key].id
+  permissions  = ["USER"]
 }
