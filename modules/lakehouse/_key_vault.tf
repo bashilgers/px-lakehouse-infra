@@ -29,6 +29,14 @@ resource "azurerm_key_vault_access_policy" "px_key_vault_managers" {
   secret_permissions = ["Get", "List", "Set", "Delete", "Recover", "Backup", "Restore", "Purge"]
 }
 
+# Let the key vault managers manage secrets, once the key vault uses azure rbac
+resource "azurerm_role_assignment" "px_key_vault_managers_secrets_officer" {
+  scope                = azurerm_key_vault.px_key_vault.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azuread_group.px_keyvault_managers.object_id
+  principal_type       = "Group"
+}
+
 # Let the key vault managers find the key vault in the azure portal
 resource "azurerm_role_assignment" "px_key_vault_managers_reader" {
   scope                = azurerm_key_vault.px_key_vault.id
@@ -43,6 +51,14 @@ resource "azurerm_key_vault_access_policy" "px_key_vault_databricks" {
   tenant_id          = data.azurerm_client_config.current.tenant_id
   object_id          = var.azure_databricks_object_id
   secret_permissions = ["Get", "List"]
+}
+
+# Let databricks read secrets through key vault-backed secret scopes, once the key vault uses azure rbac
+resource "azurerm_role_assignment" "px_key_vault_databricks_secrets_user" {
+  scope                = azurerm_key_vault.px_key_vault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = var.azure_databricks_object_id
+  principal_type       = "ServicePrincipal"
 }
 
 # Create private endpoint rule from serverless compute to keyvault
