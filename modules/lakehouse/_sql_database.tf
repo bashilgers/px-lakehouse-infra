@@ -84,3 +84,59 @@ resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_sql_private_endpoint
   resource_id                    = azurerm_mssql_server.px_sql_server.id
   group_id                       = "sqlServer"
 }
+
+# ===================================================================
+# Writing to the SQL Database
+# ===================================================================
+# Jobs write to the database as the managed identity of an access connector of
+# its own, through a Unity Catalog service credential, so without a secret. Not
+# the storage access connector: ACCESS on a service credential gives tokens for
+# any Azure resource its identity can reach, storage included. The identity's
+# user in the database, and its roles, are made by hand by the server's Entra
+# admin, as public network access is off.
+
+# Create access connector for the writes to the sql database
+resource "azurerm_databricks_access_connector" "px_sql_connector" {
+  name                = "${var.app_name}-${var.env}-sql-connector"
+  resource_group_name = azurerm_resource_group.px_rg.name
+  location            = azurerm_resource_group.px_rg.location
+  tags                = var.tags
+
+  identity {
+    type = "SystemAssigned"
+  }
+}
+
+# Create service credential on access connector, owned by the metastore admins
+# since whoever owns it can act as its identity. A service principal can only
+# create one as account admin, so it is here and not in px-lakehouse-data.
+resource "databricks_credential" "px_sql_credential" {
+  provider       = databricks.workspace
+  name           = azurerm_databricks_access_connector.px_sql_connector.name
+  purpose        = "SERVICE"
+  owner          = var.metastore_admins_group_name
+  isolation_mode = "ISOLATION_MODE_ISOLATED"
+  comment        = "Writes to ${azurerm_mssql_database.px_sql_database.name}"
+
+  azure_managed_identity {
+    access_connector_id = azurerm_databricks_access_connector.px_sql_connector.id
+  }
+}
+
+# Bind service credential to the environment's workspace only
+resource "databricks_workspace_binding" "px_sql_credential" {
+  provider       = databricks.workspace
+  securable_type = "credential"
+  securable_name = databricks_credential.px_sql_credential.name
+  workspace_id   = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+  binding_type   = "BINDING_TYPE_READ_WRITE"
+}
+
+# Let the sql writers act as the access connector's identity
+resource "databricks_grant" "px_sql_credential_writers" {
+  for_each   = toset(var.sql_writers)
+  provider   = databricks.workspace
+  credential = databricks_credential.px_sql_credential.id
+  principal  = each.key
+  privileges = ["ACCESS"]
+}
