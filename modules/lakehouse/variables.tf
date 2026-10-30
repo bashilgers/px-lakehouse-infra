@@ -137,3 +137,9 @@ variable "sql_entra_admin_object_id" {
   type        = string
   description = "Object ID of the Entra ID user that administers the SQL server"
 }
+
+variable "sql_writers" {
+  type        = list(string)
+  default     = []
+  description = "Principals with ACCESS on the SQL service credential, to write to the database as its identity: service principals by application ID, groups by name"
+}
