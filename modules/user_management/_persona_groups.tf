@@ -51,7 +51,7 @@ data "databricks_group" "px_persona" {
 # Give persona group access to its environment's workspace. The workspace's
 # users group has no entitlements, so each group gets its own (lakehouse).
 resource "databricks_mws_permission_assignment" "px_persona" {
-  for_each     = local.env_personas
+  for_each     = { for key, env_persona in local.env_personas : key => env_persona if contains(keys(local.workspace_environments), env_persona.env) }
   provider     = databricks.account
   workspace_id = var.environments[each.value.env].workspace_id
   principal_id = data.databricks_group.px_persona[each.key].id

@@ -29,7 +29,7 @@ resource "databricks_service_principal" "px_run_sp" {
 
 # Give run-as service principle access to its environment's workspace
 resource "databricks_mws_permission_assignment" "px_run_sp" {
-  for_each     = var.environments
+  for_each     = local.workspace_environments
   provider     = databricks.account
   workspace_id = each.value.workspace_id
   principal_id = databricks_service_principal.px_run_sp[each.key].id

@@ -42,7 +42,7 @@ resource "azuread_application_federated_identity_credential" "px_deploy_sp" {
 
 # Let deploy service principle read and write its environment's terraform state only
 resource "azurerm_role_assignment" "px_deploy_sp_state" {
-  for_each             = var.environments
+  for_each             = { for env, environment in var.environments : env => environment if environment.terraform_state_container_id != null }
   provider             = azurerm.azurerm_prod
   scope                = each.value.terraform_state_container_id
   role_definition_name = "Storage Blob Data Contributor"
@@ -59,7 +59,7 @@ resource "databricks_service_principal" "px_deploy_sp" {
 
 # Give deploy service principle access to its environment's workspace
 resource "databricks_mws_permission_assignment" "px_deploy_sp" {
-  for_each     = var.environments
+  for_each     = local.workspace_environments
   provider     = databricks.account
   workspace_id = each.value.workspace_id
   principal_id = databricks_service_principal.px_deploy_sp[each.key].id
