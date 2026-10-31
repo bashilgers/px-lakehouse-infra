@@ -41,21 +41,6 @@ resource "azurerm_role_assignment" "px_key_vault_managers_reader" {
   principal_type       = "Group"
 }
 
-# Look up the environment's CI deploy service principle in entra id (user_management)
-data "azuread_service_principal" "px_deploy_sp" {
-  client_id = data.databricks_service_principal.px_deploy_sp.application_id
-}
-
-# Let the deploy service principle create px-lakehouse-data's key vault-backed
-# secret scope: databricks reads the key vault as whoever creates the scope.
-# Reader shows the key vault, not its secrets
-resource "azurerm_role_assignment" "px_key_vault_deploy_sp_reader" {
-  scope                = azurerm_key_vault.px_key_vault.id
-  role_definition_name = "Reader"
-  principal_id         = data.azuread_service_principal.px_deploy_sp.object_id
-  principal_type       = "ServicePrincipal"
-}
-
 # Let databricks read secrets through key vault-backed secret scopes
 resource "azurerm_role_assignment" "px_key_vault_databricks_secrets_user" {
   scope                = azurerm_key_vault.px_key_vault.id
