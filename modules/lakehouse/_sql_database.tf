@@ -115,7 +115,7 @@ resource "databricks_credential" "px_sql_credential" {
   name           = azurerm_databricks_access_connector.px_sql_connector.name
   purpose        = "SERVICE"
   owner          = var.metastore_admins_group_name
-  isolation_mode = "ISOLATION_MODE_ISOLATED"
+  isolation_mode = var.teardown ? "ISOLATION_MODE_OPEN" : "ISOLATION_MODE_ISOLATED"
   comment        = "Writes to ${azurerm_mssql_database.px_sql_database.name}"
 
   azure_managed_identity {

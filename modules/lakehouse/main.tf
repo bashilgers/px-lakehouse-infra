@@ -42,7 +42,14 @@ provider "azapi" {
 
 provider "azurerm" {
   subscription_id = var.subscription_id
-  features {}
+  features {
+    # Azure adds resources of its own to the resource group (network intent
+    # policies, Event Grid topics), which block deleting it. Only a teardown
+    # lets the resource group go with them.
+    resource_group {
+      prevent_deletion_if_contains_resources = !var.teardown
+    }
+  }
 }
 
 resource "azurerm_resource_group" "px_rg" {

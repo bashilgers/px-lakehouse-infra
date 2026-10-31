@@ -121,7 +121,7 @@ resource "databricks_storage_credential" "px_dbr_adls_credential" {
   provider       = databricks.workspace
   name           = azurerm_databricks_access_connector.px_dbr_adls_connector.name
   owner          = var.metastore_admins_group_name
-  isolation_mode = "ISOLATION_MODE_ISOLATED"
+  isolation_mode = var.teardown ? "ISOLATION_MODE_OPEN" : "ISOLATION_MODE_ISOLATED"
   comment        = "Reads and writes ${azurerm_storage_account.px_storage_account.name}, for the external locations"
 
   azure_managed_identity {

@@ -143,3 +143,14 @@ variable "sql_writers" {
   default     = []
   description = "Principals beside the run-as service principle with ACCESS on the SQL service credential, to write to the database as its identity: service principals by application ID, groups by name"
 }
+
+variable "teardown" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Set for the apply before a destroy, and for the destroy. Opens the isolated
+    credentials: a destroy deletes their workspace bindings first, after which an
+    isolated credential is visible to no workspace and can't be deleted. And
+    lets the resource group go with what Azure added to it.
+  EOT
+}
