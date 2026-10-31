@@ -37,9 +37,9 @@ variable "databricks_account_id" {
   description = "Databricks Account ID"
 }
 
-variable "unity_catalog_metastore_id" {
+variable "unity_catalog_metastore_name" {
   type        = string
-  description = "The ID of Unity Catalog metastore"
+  description = "The name of the region's Unity Catalog metastore (unity_catalog_metastore)"
 }
 
 # ===================================================================
@@ -141,5 +141,5 @@ variable "sql_entra_admin_object_id" {
 variable "sql_writers" {
   type        = list(string)
   default     = []
-  description = "Principals with ACCESS on the SQL service credential, to write to the database as its identity: service principals by application ID, groups by name"
+  description = "Principals beside the run-as service principle with ACCESS on the SQL service credential, to write to the database as its identity: service principals by application ID, groups by name"
 }

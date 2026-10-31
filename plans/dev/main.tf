@@ -1,7 +1,7 @@
 module "lakehouse" {
   source                                   = "../../modules/lakehouse"
   subscription_id                          = "1ab862af-7c5d-4085-ae0b-af6407432de5"
-  unity_catalog_metastore_id               = "c4ffc048-f9f8-4401-a393-238a3c29fae0"
+  unity_catalog_metastore_name             = "px-lakehouse-uc-dbr-metastore"
   databricks_account_id                    = "29c54faf-2e22-47d0-b2bb-f894c93010d2"
   azure_client_id                          = var.azure_client_id
   azure_client_secret                      = var.azure_client_secret
@@ -20,8 +20,7 @@ module "lakehouse" {
   metastore_admins_group_name              = "px-lakehouse-metastore-admins"
   workspace_allowed_ip_addresses           = ["83.84.179.42/32", "91.201.164.7/32"]
   sql_writers = [
-    "8d16ee44-ac46-45b2-820c-0079e4753526", # px-lakehouse-d-run-sp, the run-as identity
-    "px-lakehouse-d-engineers",             # dev only: bundles in development mode run as the developer
+    "px-lakehouse-d-engineers", # dev only: bundles in development mode run as the developer
   ]
   tags = {
     app                 = "px-lakehouse"

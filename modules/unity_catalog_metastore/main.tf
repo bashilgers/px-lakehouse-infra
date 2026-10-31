@@ -22,11 +22,6 @@ provider "databricks" {
   client_secret = var.azure_client_secret
 }
 
-provider "databricks" {
-  alias = "workspace"
-  host  = var.workspace_host
-}
-
 resource "azurerm_resource_group" "uc_rg" {
   name     = "${var.app_name}-rg" # only one metastore per region hence no environments
   location = var.location

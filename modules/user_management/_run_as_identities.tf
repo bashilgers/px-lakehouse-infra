@@ -25,15 +25,10 @@ resource "databricks_service_principal" "px_run_sp" {
   provider       = databricks.account
   application_id = azuread_application_registration.px_run_sp[each.key].client_id
   display_name   = "${var.app_name}-${each.key}-run-sp"
-}
 
-# Give run-as service principle access to its environment's workspace
-resource "databricks_mws_permission_assignment" "px_run_sp" {
-  for_each     = local.workspace_environments
-  provider     = databricks.account
-  workspace_id = each.value.workspace_id
-  principal_id = databricks_service_principal.px_run_sp[each.key].id
-  permissions  = ["USER"]
+  # Delete it on destroy; on account level the provider only deactivates it
+  # by default, and a rebuild then finds two by this name
+  disable_as_user_deletion = false
 }
 
 # Let the environment's deploy service principle deploy jobs that run as it
