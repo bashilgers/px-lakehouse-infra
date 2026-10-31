@@ -3,65 +3,48 @@
 # ===================================================================
 # Each private endpoint rule of the network connectivity config makes a private
 # endpoint connection on its target resource, in Databricks' own subscription,
-# which stays Pending until it is approved there. Find each rule's connection
-# by its endpoint name and approve it.
+# which stays Pending until it is approved there. Approve each rule's
+# connection, found by its endpoint name, once it appears. Only a Pending one:
+# Azure SQL refuses any change to a connection that isn't. Runs where Terraform
+# runs, with its Azure CLI login.
 
 locals {
-  # Each target resource, and its private endpoint connection type
-  ncc_targets = {
-    storage   = { id = azurerm_storage_account.px_storage_account.id, type = "Microsoft.Storage/storageAccounts/privateEndpointConnections@2023-05-01" }
-    key_vault = { id = azurerm_key_vault.px_key_vault.id, type = "Microsoft.KeyVault/vaults/privateEndpointConnections@2023-07-01" }
-    sql       = { id = azurerm_mssql_server.px_sql_server.id, type = "Microsoft.Sql/servers/privateEndpointConnections@2021-11-01" }
-  }
-
-  # Each private endpoint rule, and its target
+  # Each private endpoint rule, and its target resource
   ncc_rules = {
-    storage_dfs   = { target = "storage", endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_dfs_private_endpoint_rule.endpoint_name }
-    storage_blob  = { target = "storage", endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_blob_private_endpoint_rule.endpoint_name }
-    storage_queue = { target = "storage", endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_queue_private_endpoint_rule.endpoint_name }
-    key_vault     = { target = "key_vault", endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_key_vault_private_endpoint_rule.endpoint_name }
-    sql           = { target = "sql", endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_sql_private_endpoint_rule.endpoint_name }
+    storage_dfs   = { target = azurerm_storage_account.px_storage_account.id, endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_dfs_private_endpoint_rule.endpoint_name }
+    storage_blob  = { target = azurerm_storage_account.px_storage_account.id, endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_blob_private_endpoint_rule.endpoint_name }
+    storage_queue = { target = azurerm_storage_account.px_storage_account.id, endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_queue_private_endpoint_rule.endpoint_name }
+    key_vault     = { target = azurerm_key_vault.px_key_vault.id, endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_key_vault_private_endpoint_rule.endpoint_name }
+    sql           = { target = azurerm_mssql_server.px_sql_server.id, endpoint_name = databricks_mws_ncc_private_endpoint_rule.px_ncc_sql_private_endpoint_rule.endpoint_name }
   }
 }
 
-# Give a new rule's connection time to appear on its target
-resource "time_sleep" "px_ncc_rules_created" {
-  create_duration = "2m"
+# Approve each rule's connection, again only if the rule or its target changes
+resource "terraform_data" "px_ncc_approval" {
+  for_each         = local.ncc_rules
+  triggers_replace = [each.value.target, each.value.endpoint_name]
 
-  depends_on = [
-    databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_dfs_private_endpoint_rule,
-    databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_blob_private_endpoint_rule,
-    databricks_mws_ncc_private_endpoint_rule.px_ncc_storage_queue_private_endpoint_rule,
-    databricks_mws_ncc_private_endpoint_rule.px_ncc_key_vault_private_endpoint_rule,
-    databricks_mws_ncc_private_endpoint_rule.px_ncc_sql_private_endpoint_rule,
-  ]
-}
-
-# List the private endpoint connections on each target
-data "azapi_resource_list" "px_ncc_connections" {
-  for_each               = local.ncc_targets
-  type                   = each.value.type
-  parent_id              = each.value.id
-  response_export_values = ["value"]
-
-  depends_on = [time_sleep.px_ncc_rules_created]
-}
-
-# Approve each rule's connection
-resource "azapi_update_resource" "px_ncc_approval" {
-  for_each = local.ncc_rules
-  type     = local.ncc_targets[each.value.target].type
-  resource_id = one([
-    for connection in data.azapi_resource_list.px_ncc_connections[each.value.target].output.value : connection.id
-    if endswith(connection.properties.privateEndpoint.id, "/${each.value.endpoint_name}")
-  ])
-
-  body = {
-    properties = {
-      privateLinkServiceConnectionState = {
-        status      = "Approved"
-        description = "Databricks serverless (NCC ${databricks_mws_network_connectivity_config.px_ncc.name})"
-      }
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+    environment = {
+      TARGET      = each.value.target
+      ENDPOINT    = each.value.endpoint_name
+      DESCRIPTION = "Databricks serverless (NCC ${databricks_mws_network_connectivity_config.px_ncc.name})"
     }
+    command = <<-EOT
+      set -euo pipefail
+      # The connection appears on the target some time after the rule is created
+      for attempt in $(seq 1 30); do
+        id=$(az network private-endpoint-connection list --id "$TARGET" --query "[?ends_with(properties.privateEndpoint.id, '/$ENDPOINT')].id | [0]" -o tsv 2>/dev/null || true)
+        [ -n "$id" ] && break
+        sleep 10
+      done
+      [ -n "$id" ] || { echo "No private endpoint connection $ENDPOINT on $TARGET" >&2; exit 1; }
+      status=$(az network private-endpoint-connection show --id "$id" --query properties.privateLinkServiceConnectionState.status -o tsv)
+      if [ "$status" = Pending ]; then
+        az network private-endpoint-connection approve --id "$id" --description "$DESCRIPTION" -o none
+      fi
+      echo "$ENDPOINT: $(az network private-endpoint-connection show --id "$id" --query properties.privateLinkServiceConnectionState.status -o tsv)"
+    EOT
   }
 }

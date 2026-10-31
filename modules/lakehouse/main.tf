@@ -36,6 +36,8 @@ provider "databricks" {
   host  = "https://${azurerm_databricks_workspace.px_databricks_workspace.workspace_url}"
 }
 
+# Only to forget the approvals that were azapi_update_resource before
+# (_ncc_approvals.tf). Goes once they are out of the state.
 provider "azapi" {
   subscription_id = var.subscription_id
 }
