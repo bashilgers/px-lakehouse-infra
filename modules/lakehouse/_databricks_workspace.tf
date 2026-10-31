@@ -150,17 +150,6 @@ resource "databricks_mws_network_connectivity_config" "px_ncc" {
   region   = var.location
 }
 
-# Destroyed before the workspace was, in a run that destroys it. The account
-# refuses to delete the network connectivity config and the network policy
-# while a workspace uses them, and counts a deleted workspace for 5 to 11
-# minutes (2026-10-31); scripts/teardown-environment.sh retries until it lets
-# go. Forget it here; it goes with the time provider once out of the state.
-removed {
-  from = time_sleep.px_ncc_detach
-  lifecycle {
-    destroy = false
-  }
-}
 
 # Bind network connectivity config to workspace
 resource "databricks_mws_ncc_binding" "px_ncc_binding" {
