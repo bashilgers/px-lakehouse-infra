@@ -232,7 +232,7 @@ resource "databricks_account_network_policy" "px_network_policy" {
           }
           origin = {
             included_ip_ranges = {
-              ip_ranges = var.workspace_allowed_ip_addresses
+              ip_ranges = var.allowed_ip_addresses
             }
           }
         },

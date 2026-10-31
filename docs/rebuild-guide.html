@@ -370,14 +370,16 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <table>
     <thead><tr><th>From → to</th><th>Route</th><th>Control</th></tr></thead>
     <tbody>
-      <tr><td>People → workspace UI and API</td><td>Internet, to the public front end</td><td>Network policy <code>px-lakehouse-‹e›-network-policy</code> lets in only 83.84.179.42/32 and 91.201.164.7/32. It lives on the account, so you can fix a wrong range there even when the workspace refuses you.</td></tr>
+      <tr><td>People → workspace UI and API</td><td>Internet, to the public front end</td><td>Network policy <code>px-lakehouse-‹e›-network-policy</code> lets in only 83.84.179.42/32 and 91.201.164.7/32 (<code>allowed_ip_addresses</code>). It lives on the account, so you can fix a wrong range there even when the workspace refuses you.</td></tr>
       <tr><td>CI → workspace API</td><td>Internet</td><td>The same policy lets in the deploy SP from any address, by identity, for the API only. GitHub's runners have no fixed address.</td></tr>
       <tr><td>Classic clusters → control plane</td><td>Private endpoint <code>px-lakehouse-‹e›-dbr-pe</code> (databricks_ui_api), DNS zone privatelink.azuredatabricks.net</td><td>Not over the internet, so Databricks adds no rules to the NSG (NoAzureDatabricksRules).</td></tr>
       <tr><td>Classic clusters → internet</td><td>NAT gateway <code>px-lakehouse-‹e›-nat</code> with static IP <code>px-lakehouse-‹e›-public-ip</code></td><td>On the public (host) subnet. Nothing filters this traffic.</td></tr>
-      <tr><td>Classic clusters → storage account</td><td>Service endpoint Microsoft.Storage on both Databricks subnets</td><td>The storage account has no firewall. Access rests on Entra ID roles.</td></tr>
+      <tr><td>Classic clusters → storage account</td><td>Service endpoint Microsoft.Storage on both Databricks subnets</td><td>The storage firewall denies by default and lets in these two subnets.</td></tr>
+      <tr><td>Unity Catalog → storage account</td><td>As the access connector <code>px-lakehouse-‹e›-dbr-adls-connector</code></td><td>A resource instance rule in the storage firewall lets the access connector in. Trusted Azure services are let in too.</td></tr>
+      <tr><td>Admins → storage account, key vault</td><td>Internet</td><td>The firewalls let in the same two addresses as the network policy, for Terraform's reads of the account, the portal, and managing the secrets.</td></tr>
       <tr><td>Classic clusters → SQL server</td><td>Private endpoint <code>px-lakehouse-‹e›-sqlsrv-pe</code>, DNS zone privatelink.database.windows.net</td><td>The SQL server has public network access off. The endpoint is in westeurope, the server in germanywestcentral.</td></tr>
       <tr><td>Serverless → storage (blob, dfs, queue), key vault, SQL server</td><td>NCC <code>px-lakehouse-‹e›-ncc</code>: five private endpoint rules</td><td>Each rule waits for approval on its target. The environment plan approves it with the Azure CLI. Other serverless traffic out is not restricted (FULL_ACCESS).</td></tr>
-      <tr><td>Control plane → key vault</td><td>Public endpoint</td><td>The AzureDatabricks app reads the secrets for the secret scope (Key Vault Secrets User).</td></tr>
+      <tr><td>Control plane → key vault</td><td>Public endpoint</td><td>The AzureDatabricks app reads the secrets for the secret scope (Key Vault Secrets User). The key vault firewall denies by default; it lets in trusted Microsoft services, which Key Vault-backed scopes need, and the admins' two addresses.</td></tr>
     </tbody>
   </table>
 </div>
@@ -408,10 +410,10 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
     <thead><tr><th>Identity</th><th>Kind</th><th>Signs in</th><th>Reaches</th></tr></thead>
     <tbody>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-user"/></svg>Admin users</td><td>Entra users, Databricks account admins</td><td><code>az login</code></td><td>Owner of the three subscriptions, which hold more than this platform. Members of the platform admins, the metastore admins and each environment admin group: every other right they have comes through these groups.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-platform-admins</code></td><td>Entra group of the admin users, members in the code (terraform_state)</td><td>–</td><td>Entra admin of the SQL servers. Reads and writes every Terraform state.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-platform-admins</code></td><td>Entra group of the admin users, members in the code (terraform_state)</td><td>–</td><td>Entra admin of the SQL servers. Reads and writes every Terraform state. Owner of each environment's resource group.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, its root credential, and each environment's storage and service credential. Manages the run-as SPs. USER on each workspace, with MANAGE on its secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-admins</code></td><td>Databricks account group: the admin users and the environment's deploy SP</td><td>–</td><td>USER on its own workspace. Owns what px-lakehouse-data makes. CREATE CATALOG, CONNECTION and EXTERNAL LOCATION on the metastore. CREATE EXTERNAL LOCATION on the storage credential. No ACL on the secret scope.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Their members are set in Entra ID, not in the code. Prod has no engineers group.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Engineers are also Reader on the resource group, to see its resources in the portal. Their members are set in Entra ID, not in the code. Prod has no engineers group.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-keyvault-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Service Principal User on the run-as SP, so it can deploy jobs that run as it.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-run-sp</code></td><td>Entra app, Databricks service principal</td><td>Nobody. Jobs run as it. No secret.</td><td>Grants per schema. ACCESS on the SQL service credential. READ on the secret scope. No Azure roles.</td></tr>
@@ -479,8 +481,8 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pe"/></svg>px-lakehouse-‹e›-dbr-pe</td><td>Private endpoint</td><td>Workspace back end (databricks_ui_api).</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pe"/></svg>px-lakehouse-‹e›-sqlsrv-pe</td><td>Private endpoint</td><td>SQL server (sqlServer).</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dns"/></svg>privatelink.azuredatabricks.net<br><svg class="ti" aria-hidden="true"><use href="#az-dns"/></svg>privatelink.database.windows.net</td><td>Private DNS zones</td><td>Linked to the VNet.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouse‹e›sa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Containers landing, catalog (<code>prevent_destroy</code>), bronze, silver, gold.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-‹e›-kv</td><td>Key vault</td><td>Standard. Azure RBAC, not access policies. Soft delete 7 days, no purge protection.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouse‹e›sa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Containers landing, catalog (<code>prevent_destroy</code>), bronze, silver, gold. Firewall: default deny (section 2).</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-‹e›-kv</td><td>Key vault</td><td>Standard. Azure RBAC, not access policies. Soft delete 7 days, no purge protection. Firewall: default deny (section 2).</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sqlsrv"/></svg>px-lakehouse-‹e›-sqlsrv</td><td>SQL server</td><td>germanywestcentral: westeurope refuses new SQL servers on these subscriptions. Entra ID logins only, TLS 1.2, public access off.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>px-lakehouse-‹e›-sqldb</td><td>SQL database</td><td>Serverless GP_S_Gen5_1: 0.5 to 1 vCore, pauses after 60 minutes, 10 GB.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-adf"/></svg>px-lakehouse-‹e›-adf</td><td>Data Factory</td><td>No pipelines and no network settings yet.</td></tr>
@@ -494,7 +496,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_phoenix_‹e›</code>.</td></tr>
       <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouseucsa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Container metastore.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouseucsa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Container metastore. Firewall: default deny, open to the root credential's access connector, trusted Azure services and the admins' two addresses.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>px-lakehouse-uc-dbr-connector</td><td>Access connector</td><td>The metastore's root credential, made through the account API.</td></tr>
       <tr><th colspan="3">plans/terraform_state · prod subscription, resource group <code>px-lakehouse-tfstate-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehousetfstatesa</td><td>Storage account</td><td>Entra ID only (no shared keys), TLS 1.2, versioning. Deleted blobs and containers kept 30 days. <code>prevent_destroy</code>. Four containers, one per writer.</td></tr>
@@ -509,11 +511,13 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
 <h2 id="arch-gaps">6. Points to know</h2>
 <div class="card">
   <ul class="plain">
-    <li>The storage accounts and the key vaults accept traffic from any network. Only the Entra ID roles protect them. Shared keys are on for the environment storage accounts, but off for the state account.</li>
+    <li>The environment storage accounts, the key vaults and the metastore's storage account deny traffic by default (section 2), but keep their public endpoints: there is no VPN, so the admins come in by address. The state account accepts any network, as GitHub's runners have no fixed address; it takes Entra ID logins only. Shared keys are on for the other storage accounts.</li>
+    <li>The admins' two addresses are in the code (<code>allowed_ip_addresses</code>). From another address, Terraform can't read the storage accounts or key vaults: add it there first.</li>
     <li>Traffic out is open: from classic clusters through the NAT gateway, and from serverless (FULL_ACCESS).</li>
     <li>The route table has no routes.</li>
     <li>Data Factory has no pipelines and no network settings. The code marks this as to do.</li>
     <li>The key vaults have no purge protection. A deleted vault is gone after 7 days.</li>
+    <li>Prod is as resilient as dev and test, to keep it cheap: storage LRS, the SQL database's default backups (locally redundant, no long-term retention), no SQL auditing or Defender, no purge protection.</li>
     <li>Customer-managed keys are enabled on the workspaces, but no key is set.</li>
     <li>The containers bronze, silver and gold are not used by Unity Catalog.</li>
     <li>The members of the persona and key vault manager groups are not in the code. Write them down before a tear down.</li>
@@ -610,10 +614,10 @@ const TIMELINE = [
 const PLANS = [
   { label: "1 State storage", value: 8, detail: "resource group, account, 4 containers, platform admin group and its role" },
   { label: "2 Identities", value: 61, detail: "Entra apps, service principals and groups; Databricks groups and service principals" },
-  { label: "3 Metastore", value: 9, detail: "metastore, storage, access connector, root credential" },
-  { label: "4 Environment · dev", value: 82, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access" },
-  { label: "4 Environment · test", value: 80, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
-  { label: "4 Environment · prod", value: 78, detail: "as test, without the engineers group" },
+  { label: "3 Metastore", value: 10, detail: "metastore, storage, access connector, root credential" },
+  { label: "4 Environment · dev", value: 85, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access" },
+  { label: "4 Environment · test", value: 83, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
+  { label: "4 Environment · prod", value: 80, detail: "as test, without the engineers group" },
   { label: "5 Data objects", value: 71, detail: "px-lakehouse-data: dev and test 24 each, prod 23, with their SQL connection" },
 ];
 
