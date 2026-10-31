@@ -29,13 +29,14 @@ variable "environments" {
     terraform_state_container_id = optional(string) # only this environment's state, as its deploy service principle can write all of it; null for none yet
     github_repository            = string
     github_subjects              = map(string) # federated credential name => subject
+    personas                     = optional(list(string), ["engineers", "readers", "support"])
   }))
-  description = "Per environment abbreviation: its admin users, the storage container of its Terraform state, and the GitHub Actions subjects its deploy service principle trusts"
+  description = "Per environment abbreviation: its admin users, the storage container of its Terraform state, the GitHub Actions subjects its deploy service principle trusts, and its persona groups (of local.personas in _persona_groups.tf)"
 }
 
 variable "admin_user_names" {
   type        = list(string)
-  description = "Databricks account users that are metastore admins and manage the run-as service principles"
+  description = "Databricks account users that are metastore admins, and so manage the run-as service principles and the secret scopes"
 }
 
 variable "group_owner_object_ids" {

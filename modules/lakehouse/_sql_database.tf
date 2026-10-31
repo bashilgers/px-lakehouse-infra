@@ -5,7 +5,14 @@
 # servers on these subscriptions. The private endpoint below brings it into the
 # vnet, so Databricks reaches it with public network access disabled.
 
-# Create sql server with entra-only authentication
+# Look up the admin users' Entra ID group (terraform_state)
+data "azuread_group" "px_platform_admins" {
+  display_name     = var.platform_admins_group_name
+  security_enabled = true
+}
+
+# Create sql server with entra-only authentication, administered by the admin
+# users' group: its members log in as admin with their own Entra ID login
 resource "azurerm_mssql_server" "px_sql_server" {
   name                          = "${var.app_name}-${var.env}-sqlsrv"
   resource_group_name           = azurerm_resource_group.px_rg.name
@@ -16,8 +23,8 @@ resource "azurerm_mssql_server" "px_sql_server" {
   tags                          = var.tags
 
   azuread_administrator {
-    login_username              = var.sql_entra_admin_login
-    object_id                   = var.sql_entra_admin_object_id
+    login_username              = data.azuread_group.px_platform_admins.display_name
+    object_id                   = data.azuread_group.px_platform_admins.object_id
     tenant_id                   = data.azurerm_client_config.current.tenant_id
     azuread_authentication_only = true
   }

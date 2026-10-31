@@ -48,10 +48,10 @@ resource "azurerm_storage_container" "tfstate" {
   }
 }
 
-# Let the admins read and write every state
-resource "azurerm_role_assignment" "tfstate_admins" {
-  for_each             = toset(var.admin_object_ids)
+# Let the admins read and write every state, through their group
+resource "azurerm_role_assignment" "tfstate_platform_admins" {
   scope                = azurerm_storage_account.tfstate.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = each.key
+  principal_id         = azuread_group.px_platform_admins.object_id
+  principal_type       = "Group"
 }

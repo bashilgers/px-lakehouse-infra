@@ -38,7 +38,7 @@ variable "containers" {
 
 variable "admin_object_ids" {
   type        = list(string)
-  description = "Entra ID object IDs of the admins, who read and write every state"
+  description = "Entra ID object IDs of the admin users: the members and owners of the platform admin group"
 }
 
 variable "retention_days" {

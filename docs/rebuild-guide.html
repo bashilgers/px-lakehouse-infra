@@ -351,7 +351,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td>Workspace</td><td>adb-7405619574554186.6</td><td>adb-7405605769926036.16</td><td>adb-7405604947705518.18</td></tr>
       <tr><td>Criticality tag</td><td>4-not-critical</td><td>4-not-critical</td><td>1-critical</td></tr>
       <tr><td>Deploy SP trusts</td><td>main, GitHub environment dev, pull requests</td><td>main, GitHub environment test</td><td>main, GitHub environment prod</td></tr>
-      <tr><td>Engineers</td><td>Also make their own schemas, read the secret scope, and write to SQL through the service credential</td><td>Read only</td><td>Read only</td></tr>
+      <tr><td>Engineers</td><td>Also make their own schemas, read the secret scope, and write to SQL through the service credential</td><td>Read only</td><td>None: prod has no engineers group</td></tr>
       <tr><td>Foreign catalog</td><td><code>px_fed_phoenix_sqlsrv_d</code></td><td><code>px_fed_phoenix_sqlsrv_t</code></td><td><code>px_fed_phoenix_sqlsrv_p</code></td></tr>
     </tbody>
   </table>
@@ -407,10 +407,11 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <table>
     <thead><tr><th>Identity</th><th>Kind</th><th>Signs in</th><th>Reaches</th></tr></thead>
     <tbody>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-user"/></svg>Admin users</td><td>Entra users, Databricks account admins</td><td><code>az login</code></td><td>Owner of the three subscriptions. Members of the metastore admins and of each environment admin group. Entra admin of the SQL servers. Read and write every Terraform state. Manage the run-as SPs. MANAGE on the secret scopes, as their creator.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, its root credential, and each environment's storage and service credential.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-user"/></svg>Admin users</td><td>Entra users, Databricks account admins</td><td><code>az login</code></td><td>Owner of the three subscriptions, which hold more than this platform. Members of the platform admins, the metastore admins and each environment admin group: every other right they have comes through these groups.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-platform-admins</code></td><td>Entra group of the admin users, members in the code (terraform_state)</td><td>–</td><td>Entra admin of the SQL servers. Reads and writes every Terraform state.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, its root credential, and each environment's storage and service credential. Manages the run-as SPs. USER on each workspace, with MANAGE on its secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-admins</code></td><td>Databricks account group: the admin users and the environment's deploy SP</td><td>–</td><td>USER on its own workspace. Owns what px-lakehouse-data makes. CREATE CATALOG, CONNECTION and EXTERNAL LOCATION on the metastore. CREATE EXTERNAL LOCATION on the storage credential. No ACL on the secret scope.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Their members are set in Entra ID, not in the code.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Their members are set in Entra ID, not in the code. Prod has no engineers group.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-keyvault-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Service Principal User on the run-as SP, so it can deploy jobs that run as it.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-run-sp</code></td><td>Entra app, Databricks service principal</td><td>Nobody. Jobs run as it. No secret.</td><td>Grants per schema. ACCESS on the SQL service credential. READ on the secret scope. No Azure roles.</td></tr>
@@ -427,7 +428,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <table>
     <thead><tr><th>Group</th><th>Entitlements</th><th>Data (grants in px-lakehouse-data)</th></tr></thead>
     <tbody>
-      <tr><td>engineers</td><td>Workspace, Databricks SQL</td><td>Read the whole catalog and the foreign catalog. In dev also: make their own schemas, read the secret scope, write to SQL through the service credential.</td></tr>
+      <tr><td>engineers</td><td>Workspace, Databricks SQL</td><td>Dev and test only. Read the whole catalog and the foreign catalog. In dev also: make their own schemas, read the secret scope, write to SQL through the service credential.</td></tr>
       <tr><td>readers</td><td>Databricks SQL only</td><td>SELECT on gold. Nothing else.</td></tr>
       <tr><td>support</td><td>Workspace, Databricks SQL</td><td>SELECT on audit, metadata and bronze. Read the landing volumes.</td></tr>
       <tr><td>run-as SP</td><td>–</td><td>USE CATALOG. Write audit, bronze, silver and gold. Read metadata and the landing volumes.</td></tr>
@@ -489,7 +490,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pl"/></svg>px-lakehouse-‹e›-ncc</td><td>Network connectivity config</td><td>Five private endpoint rules: storage blob, dfs and queue, key vault, SQL server.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>px-lakehouse-‹e›-network-policy</td><td>Network policy</td><td>Ingress: two IP addresses, and the deploy SP by identity. Egress: not restricted.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The admin group gets its metastore grant.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-keyvault</td><td>Secret scope</td><td>On the key vault. READ for the run-as SP (and in dev the engineers), MANAGE for its creator.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-keyvault</td><td>Secret scope</td><td>On the key vault. READ for the run-as SP (and in dev the engineers), MANAGE for the metastore admins. The plan takes away the MANAGE that Databricks gives the creator.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_phoenix_‹e›</code>.</td></tr>
       <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
@@ -499,7 +500,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehousetfstatesa</td><td>Storage account</td><td>Entra ID only (no shared keys), TLS 1.2, versioning. Deleted blobs and containers kept 30 days. <code>prevent_destroy</code>. Four containers, one per writer.</td></tr>
       <tr><th colspan="3">plans/user_management · Entra ID and the Databricks account</th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg>App registrations</td><td>Entra apps and service principals</td><td>Per environment: deploy SP (with GitHub federated credentials and its state role), run-as SP, SQL SP. Also <code>px-lakehouse-sp</code>, retired.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Entra groups</td><td>Security groups</td><td>Per environment: engineers, readers, support and keyvault-managers. Members are not in the code.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Entra groups</td><td>Security groups</td><td>Per environment: engineers (not in prod), readers, support and keyvault-managers. Members are not in the code.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Account groups</td><td>Databricks groups</td><td><code>px-lakehouse-‹e›-admins</code> and <code>px-lakehouse-metastore-admins</code>, with their members.</td></tr>
     </tbody>
   </table>
@@ -535,9 +536,9 @@ const STATUS_TEXT = "Built. Every plan shows no changes, px-lakehouse-data's thr
 const STEPS = [
   {
     n: 1, name: "State storage", plan: "plans/terraform_state", status: "done",
-    goal: "Make the storage account that holds the state of all plans, its own state included.",
+    goal: "Make the storage account that holds the state of all plans, its own state included, and the platform admin group, which every later plan uses.",
     do: [
-      "The first time, when the account does not exist yet, run the script. It applies on local state, then moves the state into the account:<pre><code>plans/terraform_state/bootstrap.sh</code></pre>",
+      "The first time, when the account does not exist yet, run the script. It applies on local state, then moves the state into the account. In between it logs you in again: you reach the account through the platform admin group it just made, which a token from before lacks:<pre><code>plans/terraform_state/bootstrap.sh</code></pre>",
       "After that, plan and apply this plan as any other.",
     ],
     check: "<code>terraform plan</code> shows no changes.",
@@ -561,7 +562,7 @@ const STEPS = [
     goal: "Make the workspace, network, storage, SQL, key vault, Data Factory and NCC. Approve the serverless private endpoints. Assign the identities and give their entitlements. Grant the admin group on the metastore. Make the credentials and the secret scope. Set the default catalog.",
     do: ["Run <code>terraform apply</code> for each environment. The three can run in parallel. Each takes about 8 minutes."],
     check: "<code>terraform plan</code> shows no changes. The apply prints <em>Approved</em> for each of the five private endpoints.",
-    why: "The plan finds the metastore, the admin group and the service principals by name. It resolves each persona group into the Databricks account when it reads it. It makes the secret scope as you: Databricks writes to the key vault as the scope's creator, and px-lakehouse-data's deploy identity has no role on it.",
+    why: "The plan finds the metastore, the admin group and the service principals by name. It resolves each persona group into the Databricks account when it reads it. It makes the secret scope as you: Databricks writes to the key vault as the scope's creator, and px-lakehouse-data's deploy identity has no role on it. Then it gives MANAGE to the metastore admins and deletes yours, with the Databricks CLI.",
   },
   {
     n: 5, name: "Data objects", plan: "px-lakehouse-data: unity_catalog", status: "done",
@@ -607,13 +608,13 @@ const TIMELINE = [
 
 // Resources each plan manages today, from its state
 const PLANS = [
-  { label: "1 State storage", value: 7, detail: "resource group, account, 4 containers, admin role" },
-  { label: "2 Identities", value: 62, detail: "Entra apps, service principals and groups; Databricks groups and service principals" },
+  { label: "1 State storage", value: 8, detail: "resource group, account, 4 containers, platform admin group and its role" },
+  { label: "2 Identities", value: 61, detail: "Entra apps, service principals and groups; Databricks groups and service principals" },
   { label: "3 Metastore", value: 9, detail: "metastore, storage, access connector, root credential" },
-  { label: "4 Environment · dev", value: 80, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access" },
-  { label: "4 Environment · test", value: 78, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
-  { label: "4 Environment · prod", value: 78, detail: "as test" },
-  { label: "5 Data objects", value: 72, detail: "px-lakehouse-data: dev, test and prod 24 each, with their SQL connection" },
+  { label: "4 Environment · dev", value: 82, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access" },
+  { label: "4 Environment · test", value: 80, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
+  { label: "4 Environment · prod", value: 78, detail: "as test, without the engineers group" },
+  { label: "5 Data objects", value: 71, detail: "px-lakehouse-data: dev and test 24 each, prod 23, with their SQL connection" },
 ];
 
 // The proof on the throwaway environment x, the whole flow with the final plans: clock times on 2026-10-31, UTC
@@ -1007,8 +1008,8 @@ const OVERVIEW = (() => {
       card(376, row(2), "az-mi", "Access connector", "for SQL (sqlsrv)", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Managed identity behind the service credential with the same name. Writes to the SQL database."]),
       card(376, 489, "az-sa", "DBFS storage", "pxlakehouse‹e›dbfs", ["pxlakehouse‹e›dbfs", "The workspace's root storage. Databricks manages it."]),
       card(622, 86, "az-app", "App registrations", "deploy, run-as, SQL ×3", ["App registrations", "Per environment: deploy SP, run-as SP and SQL SP. Also px-lakehouse-sp, retired."], 170),
-      card(802, 86, "az-user", "Admin user", "Owner of 3 subscriptions", ["Admin user", "Owner of the 3 subscriptions, Databricks account admin, Entra admin of the SQL servers."], 170),
-      card(622, 130, "az-group", "Groups", "personas ×9, KV mgrs ×3", ["Entra groups", "px-lakehouse-‹e›-engineers, -readers, -support (9)<br>px-lakehouse-‹e›-keyvault-managers (3)<br>Members are set in Entra ID, not in the code."], 170),
+      card(802, 86, "az-user", "Admin user", "Owner of 3 subscriptions", ["Admin user", "Owner of the 3 subscriptions, Databricks account admin. Its other rights come through groups: the platform admins are Entra admin of the SQL servers."], 170),
+      card(622, 130, "az-group", "Groups", "personas ×8, KV mgrs ×3", ["Entra groups", "px-lakehouse-‹e›-engineers (not prod), -readers, -support (8)<br>px-lakehouse-‹e›-keyvault-managers (3)<br>px-lakehouse-platform-admins (1, from terraform_state)<br>Members are set in Entra ID, not in the code, except the platform admins'."], 170),
       card(802, 130, "az-ent", "AzureDatabricks", "reads the key vaults", ["AzureDatabricks", "First-party app. Key Vault Secrets User on each key vault, for the secret scope."], 170),
       card(622, 230, "az-group", "Account groups", "Entra personas, admins", ["Account groups", "px-lakehouse-‹e›-admins: admin users and the deploy SP.<br>px-lakehouse-metastore-admins: people only.<br>The persona groups, resolved from Entra ID by the environment plans."], 170),
       card(802, 230, "az-app", "Service principals", "deploy, run-as ×3", ["Service principals", "px-lakehouse-‹e›-deploy-sp and px-lakehouse-‹e›-run-sp, registered from Entra ID."], 170),
@@ -1116,7 +1117,7 @@ const ACCESS = (() => {
       card(c2, 198, "az-dbr", "Foreign catalog", "read-only", ["px_fed_phoenix_sqlsrv_‹e›", "On the connection px-lakehouse-‹e›-sqlsrv, database px-lakehouse-‹e›-sqldb."]),
       card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-‹e›-sqlsrv", "Made by px-lakehouse-data's scripts/sql-access.sh with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
       card(c4, 198, "az-app", "SQL SP", "client secret", ["px-lakehouse-‹e›-sql-sp", "Only db_datareader: whoever reads the secret scope can act as it."]),
-      card(c1, 278, "az-group", "Run-as SP, creator", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. In dev, engineers: READ. The admin who applied the plan: MANAGE, as its creator."]),
+      card(c1, 278, "az-group", "Run-as SP, admins", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. In dev, engineers: READ. Metastore admins: MANAGE. The creator's own MANAGE is deleted."]),
       card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "Backed by the environment's key vault. Made by the environment plan."]),
       card(c4, 278, "az-ent", "AzureDatabricks", "first-party app", ["AzureDatabricks", "Databricks reads the key vault as this app for every key vault-backed secret scope."]),
       card(c5, 278, "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC, not access policies: changing the vault does not give its secrets."], 144, 144),

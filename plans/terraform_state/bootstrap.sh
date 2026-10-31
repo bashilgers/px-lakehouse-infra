@@ -13,6 +13,11 @@ printf 'terraform {\n  backend "local" {}\n}\n' > backend_override.tf
 terraform init -input=false -reconfigure
 terraform apply -input=false
 
+# The admins reach the account through the platform admin group, which the apply just made, and an Azure CLI
+# token from before the group lacks it: log in again
+az logout
+az login --tenant "$ARM_TENANT_ID" >/dev/null
+
 # The admins' data role on the account can take some minutes to apply
 rm -f backend_override.tf
 for attempt in 1 2 3 4 5 6; do

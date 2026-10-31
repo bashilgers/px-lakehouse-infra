@@ -10,17 +10,26 @@
 # federation), so the entitlements use the account's.
 
 locals {
+  # Only the environment's own personas (var.personas)
   persona_entitlements = {
-    engineers = { workspace_access = true, databricks_sql_access = true }
-    readers   = { workspace_access = false, databricks_sql_access = true }
-    support   = { workspace_access = true, databricks_sql_access = true }
+    for persona, entitlements in {
+      engineers = { workspace_access = true, databricks_sql_access = true }
+      readers   = { workspace_access = false, databricks_sql_access = true }
+      support   = { workspace_access = true, databricks_sql_access = true }
+    } : persona => entitlements if contains(var.personas, persona)
   }
 }
 
-# Look up the environment's admin group and run-as service principle (user_management)
+# Look up the environment's admin group, the metastore admins and the run-as
+# service principle (user_management)
 data "databricks_group" "px_env_admins" {
   provider     = databricks.account
   display_name = var.admins_group_name
+}
+
+data "databricks_group" "px_metastore_admins" {
+  provider     = databricks.account
+  display_name = var.metastore_admins_group_name
 }
 
 data "databricks_service_principal" "px_run_sp" {
@@ -48,6 +57,15 @@ resource "databricks_mws_permission_assignment" "px_env_admins" {
   provider     = databricks.account
   workspace_id = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
   principal_id = data.databricks_group.px_env_admins.id
+  permissions  = ["USER"]
+}
+
+# Give the metastore admins access to the workspace, for their MANAGE on the
+# secret scope. Its members, the admin users, are workspace admins already.
+resource "databricks_mws_permission_assignment" "px_metastore_admins" {
+  provider     = databricks.account
+  workspace_id = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+  principal_id = data.databricks_group.px_metastore_admins.id
   permissions  = ["USER"]
 }
 

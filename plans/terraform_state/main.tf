@@ -9,7 +9,7 @@ module "terraform_state" {
     "px-lakehouse-data-t", # px-lakehouse-data test
     "px-lakehouse-data-p", # px-lakehouse-data prod
   ]
-  # Entra ID object IDs: bas.hilgers@outlook.com
+  # The platform admin group's members, by Entra ID object ID: bas.hilgers@outlook.com
   admin_object_ids = ["c0071a22-3f84-4337-ad09-871f52c3a1ba"]
   tags = {
     app                 = "px-lakehouse"

@@ -7,7 +7,8 @@
 # Membership is managed in Entra ID, not here, and Databricks takes it from
 # there through automatic identity management. Each environment's lakehouse
 # plan resolves its groups into the Databricks account and assigns them to its
-# workspace.
+# workspace. An environment has only the personas it lists: prod has no
+# engineers.
 
 locals {
   personas = {
@@ -16,11 +17,12 @@ locals {
     support   = "Support of %s: watch its loads through the run logs, landing files and bronze"
   }
 
-  # One entry per environment and persona
-  env_personas = {
-    for pair in setproduct(keys(var.environments), keys(local.personas)) :
-    "${pair[0]}/${pair[1]}" => { env = pair[0], persona = pair[1] }
-  }
+  # One entry per environment and each of its personas
+  env_personas = merge([
+    for env, environment in var.environments : {
+      for persona in environment.personas : "${env}/${persona}" => { env = env, persona = persona }
+    }
+  ]...)
 }
 
 # Create security group in entra id per environment and persona

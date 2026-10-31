@@ -40,6 +40,8 @@ module "user_management" {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
         github-environment-prod = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:environment:prod"
       }
+      # No engineers in prod: they build in dev and test, and nobody reads all of prod's data
+      personas = ["readers", "support"]
     }
   }
 }

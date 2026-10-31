@@ -32,8 +32,9 @@ resource "databricks_service_principal" "px_run_sp" {
 }
 
 # Let the environment's deploy service principle deploy jobs that run as it
-# (Service Principal User), and the admin users manage it. Authoritative: these
-# are all its roles, the creator's default manager role included.
+# (Service Principal User), and the metastore admins, the admin users' group,
+# manage it. Authoritative: these are all its roles, so the manager role
+# Databricks gives its creator is taken away.
 resource "databricks_access_control_rule_set" "px_run_sp" {
   for_each = var.environments
   provider = databricks.account
@@ -45,7 +46,7 @@ resource "databricks_access_control_rule_set" "px_run_sp" {
   }
 
   grant_rules {
-    principals = [for user in var.admin_user_names : data.databricks_user.px_admins[user].acl_principal_id]
+    principals = [databricks_group.px_metastore_admins.acl_principal_id]
     role       = "roles/servicePrincipal.manager"
   }
 }
