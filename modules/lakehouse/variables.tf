@@ -56,6 +56,11 @@ variable "metastore_admins_group_name" {
   description = "Name of the humans-only account group that owns the metastore"
 }
 
+variable "default_catalog_name" {
+  type        = string
+  description = "Catalog that unqualified table names in the workspace point at: the environment's catalog, which px-lakehouse-data makes"
+}
+
 # ===================================================================
 # Service Principles
 # ===================================================================
@@ -117,6 +122,12 @@ variable "service_endpoints" {
 variable "azure_databricks_object_id" {
   type        = string
   description = "Object ID of the AzureDatabricks enterprise application (app ID 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d) in the tenant"
+}
+
+variable "secret_readers" {
+  type        = list(string)
+  default     = []
+  description = "Principals beside the run-as service principle with READ on the secret scope: service principals by application ID, groups by name"
 }
 
 # ===================================================================

@@ -213,11 +213,10 @@ for env in dev test prod; do                       # 4. in parallel, about 8 min
   (terraform -chdir=plans/$env init && terraform -chdir=plans/$env apply -auto-approve) &
 done; wait
 
-# 5. in px-lakehouse-data, after its IDs are updated and test's and prod's secret scopes exist.
-#    Dev's unity_catalog stops at its SQL connection until that exists (section 6).
-for env in dev test prod; do for root in workspace unity_catalog; do
-  DATABRICKS_AUTH_TYPE=azure-cli .github/scripts/terraform.sh apply $env $root
-done; done</code></pre>
+# 5. in px-lakehouse-data (its docs/build-guide.html): per environment, scripts/sql-access.sh,
+#    then one CI run (Actions > databricks-infra > Run workflow). Dev's waits on the script.
+for env in dev test prod; do scripts/sql-access.sh $env; done
+for env in dev test prod; do gh workflow run databricks-infra.yml --ref main -f environment=$env; done</code></pre>
 <p style="margin: 0">To tear down, after px-lakehouse-data's objects:</p>
 <pre style="margin-bottom: 0"><code>for env in dev test prod; do scripts/teardown-environment.sh $env; done
 terraform -chdir=plans/unity_catalog_metastore destroy
@@ -258,14 +257,14 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
 </div>
 
 <h2 id="hand">6. Steps by hand</h2>
-<p>These steps stay manual on purpose. They handle secret values, or they need access that Terraform does not have. Do them after step 5.</p>
+<p>These steps stay manual on purpose. They handle secret values, or they need access that Terraform does not have. Do them between step 4 and step 5.</p>
 <div class="card table-wrap" id="hand-table"></div>
 
 <h2 id="teardown">7. Tear down</h2>
 <div class="card">
   <p>Do the steps in reverse order.</p>
   <ol>
-    <li><span class="label-inline">Data objects.</span> Destroy px-lakehouse-data's objects in each environment first. They have <code>prevent_destroy</code>, and the catalogs and external locations are isolated: lift the guards and forget their workspace bindings before you destroy.</li>
+    <li><span class="label-inline">Data objects.</span> Destroy px-lakehouse-data's objects in each environment first, one command each: <code>scripts/teardown-environment.sh &lt;env&gt;</code> in px-lakehouse-data. It lifts their guards for that run.</li>
     <li><span class="label-inline">Environments.</span> Run one command per environment:<pre><code>scripts/teardown-environment.sh dev</code></pre>For this run only, the script writes an override file into the module. The file lifts <code>prevent_destroy</code>, opens the isolated credentials (else the destroy cannot delete them after their bindings) and lets the resource group go with what Azure added to it. The account still counts a deleted workspace for 5 to 11 minutes, and refuses to delete the network connectivity config while it does. Thus the script does the destroy again every 2 minutes until it is complete. At the end, it makes sure through the account API that the storage credential is gone: a credential delete that finds nothing passes silently. Add <code>-auto-approve</code> to run it without questions.</li>
     <li><span class="label-inline">Metastore.</span> Run <code>terraform destroy</code>. Terraform cannot update the metastore (a provider error on the Delta Sharing token lifetime). If the metastore still holds objects, delete it with <code>databricks account metastores delete &lt;id&gt; --force</code>.</li>
     <li><span class="label-inline">Identities.</span> Run <code>terraform destroy</code>. The Entra group members are not in the code: write them down first.</li>
@@ -395,9 +394,9 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <table>
     <thead><tr><th>Identity</th><th>Kind</th><th>Signs in</th><th>Reaches</th></tr></thead>
     <tbody>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-user"/></svg>Admin users</td><td>Entra users, Databricks account admins</td><td><code>az login</code></td><td>Owner of the three subscriptions. Members of the metastore admins and of each environment admin group. Entra admin of the SQL servers. Read and write every Terraform state. Manage the run-as SPs.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-user"/></svg>Admin users</td><td>Entra users, Databricks account admins</td><td><code>az login</code></td><td>Owner of the three subscriptions. Members of the metastore admins and of each environment admin group. Entra admin of the SQL servers. Read and write every Terraform state. Manage the run-as SPs. MANAGE on the secret scopes, as their creator.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, its root credential, and each environment's storage and service credential.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-admins</code></td><td>Databricks account group: the admin users and the environment's deploy SP</td><td>–</td><td>USER on its own workspace. Owns what px-lakehouse-data makes. CREATE CATALOG, CONNECTION and EXTERNAL LOCATION on the metastore. CREATE EXTERNAL LOCATION on the storage credential. MANAGE on the secret scope.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-admins</code></td><td>Databricks account group: the admin users and the environment's deploy SP</td><td>–</td><td>USER on its own workspace. Owns what px-lakehouse-data makes. CREATE CATALOG, CONNECTION and EXTERNAL LOCATION on the metastore. CREATE EXTERNAL LOCATION on the storage credential. No ACL on the secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Their members are set in Entra ID, not in the code.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-keyvault-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Service Principal User on the run-as SP, so it can deploy jobs that run as it.</td></tr>
@@ -477,6 +476,8 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pl"/></svg>px-lakehouse-‹e›-ncc</td><td>Network connectivity config</td><td>Five private endpoint rules: storage blob, dfs and queue, key vault, SQL server.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>px-lakehouse-‹e›-network-policy</td><td>Network policy</td><td>Ingress: two IP addresses, and the deploy SP by identity. Egress: not restricted.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The admin group gets its metastore grant.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-keyvault</td><td>Secret scope</td><td>On the key vault. READ for the run-as SP (and in dev the engineers), MANAGE for its creator.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_phoenix_‹e›</code>.</td></tr>
       <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouseucsa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Container metastore.</td></tr>
@@ -502,6 +503,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
     <li>Customer-managed keys are enabled on the workspaces, but no key is set.</li>
     <li>The containers bronze, silver and gold are not used by Unity Catalog.</li>
     <li>The members of the persona and key vault manager groups are not in the code. Write them down before a tear down.</li>
+    <li>The metastore has metastore-level storage. With it, Databricks makes a catalog <code>main</code>, open to every workspace, and the external location <code>metastore_root_location</code>, both owned by whoever made the metastore. A metastore without that storage would make neither: the catalogs have their own.</li>
   </ul>
 </div>
 
@@ -515,7 +517,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
 // Data. Status: "done", "todo" or "waiting".
 // ---------------------------------------------------------------------------
 const AS_OF = "2026-10-31 15:00";
-const STATUS_TEXT = "All plans show no changes. Dev's SQL connection waits on steps by hand (section 6). The new plans are in px-lakehouse-infra #29, which waits for review.";
+const STATUS_TEXT = "Step 4 now also makes the secret scope and sets the default catalog (px-lakehouse-infra #30), which waits for review and an apply. Dev's SQL connection waits on the steps by hand (section 6). Step 5 has its own guide in px-lakehouse-data.";
 
 const STEPS = [
   {
@@ -543,21 +545,21 @@ const STEPS = [
   },
   {
     n: 4, name: "Environments", plan: "plans/dev, test, prod", status: "done",
-    goal: "Make the workspace, network, storage, SQL, key vault, Data Factory and NCC. Approve the serverless private endpoints. Assign the identities and give their entitlements. Grant the admin group on the metastore. Make the credentials.",
+    goal: "Make the workspace, network, storage, SQL, key vault, Data Factory and NCC. Approve the serverless private endpoints. Assign the identities and give their entitlements. Grant the admin group on the metastore. Make the credentials and the secret scope. Set the default catalog.",
     do: ["Run <code>terraform apply</code> for each environment. The three can run in parallel. Each takes about 8 minutes."],
     check: "<code>terraform plan</code> shows no changes. The apply prints <em>Approved</em> for each of the five private endpoints.",
-    why: "The plan finds the metastore, the admin group and the service principals by name. It resolves each persona group into the Databricks account when it reads it.",
+    why: "The plan finds the metastore, the admin group and the service principals by name. It resolves each persona group into the Databricks account when it reads it. It makes the secret scope as you: Databricks writes to the key vault as the scope's creator, and px-lakehouse-data's deploy identity has no role on it.",
   },
   {
-    n: 5, name: "Data objects", plan: "px-lakehouse-data: workspace, unity_catalog", status: "waiting",
-    goal: "Make the external locations, catalogs, schemas, volumes and secret scopes.",
+    n: 5, name: "Data objects", plan: "px-lakehouse-data: unity_catalog", status: "waiting",
+    goal: "Make the external locations, catalogs, schemas, volumes and the federation. px-lakehouse-data's docs/build-guide.html has the steps.",
     do: [
-      "Put the new IDs in <code>infra/envs/*</code> (workspace host and ID, metastore ID, run-as IDs) and in <code>DEPLOY_CLIENT_IDS</code> of the workflow. Section 8 has them.",
-      "Test and prod: make the secret scope by hand. Give the owner group MANAGE first, then remove your own MANAGE:<pre><code>databricks secrets create-scope --json '{\"scope\": \"px-lakehouse-keyvault\", \"scope_backend_type\": \"AZURE_KEYVAULT\", \"backend_azure_keyvault\": {...}}'\ndatabricks secrets put-acl px-lakehouse-keyvault px-lakehouse-&lt;e&gt;-admins MANAGE\ndatabricks secrets delete-acl px-lakehouse-keyvault &lt;you&gt;</code></pre>",
-      "Apply <code>workspace</code>, then <code>unity_catalog</code>, for each environment. In dev, leave out the connection and the foreign catalog until they exist (section 6).",
+      "After a rebuild, put the new IDs in <code>infra/envs/*</code> (workspace host and ID, metastore ID, run-as IDs) and in <code>DEPLOY_CLIENT_IDS</code> of the workflow. Section 8 has them.",
+      "Run <code>scripts/sql-access.sh &lt;env&gt;</code> where the tfvars list a SQL connection (dev): the connection must exist before its apply.",
+      "Run the workflow once per environment: Actions &gt; databricks-infra &gt; Run workflow.",
     ],
-    check: "<code>terraform plan</code> shows no changes for each root.",
-    why: "The data repository keeps its IDs as values, for its CI. Its deploy identity also has no rights on the key vault, so test's and prod's secret scopes stay manual.",
+    check: "Each run applies 19 objects (dev: 24, with its connection). The next plan shows no changes.",
+    why: "The data repository keeps its IDs as values, for its CI. Its deploy identity makes everything there; test was torn down and built from zero that way, twice.",
   },
 ];
 
@@ -598,7 +600,7 @@ const PLANS = [
   { label: "4 Environment · dev", value: 75, detail: "workspace, network, storage, SQL, key vault, Data Factory, NCC, access" },
   { label: "4 Environment · test", value: 74, detail: "as dev, without the engineers' SQL writer grant" },
   { label: "4 Environment · prod", value: 74, detail: "as test" },
-  { label: "5 Data objects", value: 67, detail: "px-lakehouse-data: dev 23 · test 22 · prod 22" },
+  { label: "5 Data objects", value: 57, detail: "px-lakehouse-data: dev 19 · test 19 · prod 19. Dev gets 5 more with its connection" },
 ];
 
 // The proof on the test environment x, with the final plans: clock times on 2026-10-31
@@ -610,10 +612,9 @@ const PROOF = [
 // [what, who, status]
 const HAND = [
   ["Add the members to the Entra groups again: persona groups and key vault managers. The new groups are empty.", "You", "To do"],
-  ["Add the SQL access connector to each database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and dev's SQL identity (<code>db_datareader</code>). The SQL server has no public access.", "You", "To do"],
-  ["Make a client secret for <code>px-lakehouse-d-sql-sp</code>. Put it in the key vault as <code>px-lakehouse-d-sql-sp-client-secret</code>.", "You", "To do"],
-  ["Make dev's federation connection <code>px-lakehouse-d-sqlsrv</code>. Then apply dev's <code>unity_catalog</code> in full.", "You", "To do"],
-  ["Make the secret scope in test and prod (step 5).", "Claude", "Done"],
+  ["Run px-lakehouse-data's <code>scripts/sql-access.sh &lt;env&gt;</code> for each environment. It adds the SQL access connector to the database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and where a connection is listed (dev) the SQL identity (<code>db_datareader</code>), its client secret in the key vault, and the connection. It opens the SQL server to your address for the run only.", "You", "To do"],
+  ["Give <code>metastore_root_location</code>, which Databricks makes with the metastore's root credential, to <code>px-lakehouse-metastore-admins</code>.", "You", "To do"],
+  ["Drop the catalog <code>main</code>, which Databricks makes with the metastore, open to every workspace.", "Claude", "Done"],
 ];
 
 const IDS = [
@@ -1097,8 +1098,8 @@ const ACCESS = (() => {
       card(c2, 198, "az-dbr", "Foreign catalog", "dev only, read-only", ["px_fed_phoenix_sqlsrv_d", "On the connection px-lakehouse-d-sqlsrv, database px-lakehouse-d-sqldb."]),
       card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-d-sqlsrv", "Made by hand with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
       card(c4, 198, "az-app", "SQL SP", "client secret", ["px-lakehouse-‹e›-sql-sp", "Only db_datareader: whoever reads the secret scope can act as it."]),
-      card(c1, 278, "az-group", "Run-as SP, admins", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. Environment admins: MANAGE. In dev, engineers: READ."]),
-      card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "Backed by the environment's key vault."]),
+      card(c1, 278, "az-group", "Run-as SP, creator", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. In dev, engineers: READ. The admin who applied the plan: MANAGE, as its creator."]),
+      card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "Backed by the environment's key vault. Made by the environment plan."]),
       card(c4, 278, "az-ent", "AzureDatabricks", "first-party app", ["AzureDatabricks", "Databricks reads the key vault as this app for every key vault-backed secret scope."]),
       card(c5, 278, "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC, not access policies: changing the vault does not give its secrets."], 144, 144),
       card(c1, 378, "az-group", "Key vault managers", "Entra group", ["px-lakehouse-‹e›-keyvault-managers", "Manage and renew the secrets, such as the SQL SP's client secret."]),

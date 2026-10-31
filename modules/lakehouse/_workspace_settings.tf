@@ -38,3 +38,13 @@ resource "databricks_workspace_conf" "px_workspace_conf" {
     prevent_destroy = true
   }
 }
+
+# Point unqualified table names at the environment's catalog. Databricks points
+# them at a catalog named after the workspace, which nobody makes.
+resource "databricks_default_namespace_setting" "px_default_namespace" {
+  provider = databricks.workspace
+
+  namespace {
+    value = var.default_catalog_name
+  }
+}
