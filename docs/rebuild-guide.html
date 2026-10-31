@@ -516,8 +516,8 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
 // ---------------------------------------------------------------------------
 // Data. Status: "done", "todo" or "waiting".
 // ---------------------------------------------------------------------------
-const AS_OF = "2026-10-31 15:00";
-const STATUS_TEXT = "Step 4 now also makes the secret scope and sets the default catalog (px-lakehouse-infra #30), which waits for review and an apply. Dev's SQL connection waits on the steps by hand (section 6). Step 5 has its own guide in px-lakehouse-data.";
+const AS_OF = "2026-10-31 18:30 UTC";
+const STATUS_TEXT = "Built. Every plan shows no changes, px-lakehouse-data's three environments included, and the steps by hand are done. Step 4 also makes the secret scope and sets the default catalog since px-lakehouse-infra #30. Step 5 has its own guide in px-lakehouse-data";
 
 const STEPS = [
   {
@@ -551,7 +551,7 @@ const STEPS = [
     why: "The plan finds the metastore, the admin group and the service principals by name. It resolves each persona group into the Databricks account when it reads it. It makes the secret scope as you: Databricks writes to the key vault as the scope's creator, and px-lakehouse-data's deploy identity has no role on it.",
   },
   {
-    n: 5, name: "Data objects", plan: "px-lakehouse-data: unity_catalog", status: "waiting",
+    n: 5, name: "Data objects", plan: "px-lakehouse-data: unity_catalog", status: "done",
     goal: "Make the external locations, catalogs, schemas, volumes and the federation. px-lakehouse-data's docs/build-guide.html has the steps.",
     do: [
       "After a rebuild, put the new IDs in <code>infra/envs/*</code> (workspace host and ID, metastore ID, run-as IDs) and in <code>DEPLOY_CLIENT_IDS</code> of the workflow. Section 8 has them.",
@@ -597,10 +597,10 @@ const PLANS = [
   { label: "1 State storage", value: 7, detail: "resource group, account, 4 containers, admin role" },
   { label: "2 Identities", value: 62, detail: "Entra apps, service principals and groups; Databricks groups and service principals" },
   { label: "3 Metastore", value: 9, detail: "metastore, storage, access connector, root credential" },
-  { label: "4 Environment · dev", value: 75, detail: "workspace, network, storage, SQL, key vault, Data Factory, NCC, access" },
-  { label: "4 Environment · test", value: 74, detail: "as dev, without the engineers' SQL writer grant" },
-  { label: "4 Environment · prod", value: 74, detail: "as test" },
-  { label: "5 Data objects", value: 57, detail: "px-lakehouse-data: dev 19 · test 19 · prod 19. Dev gets 5 more with its connection" },
+  { label: "4 Environment · dev", value: 80, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access" },
+  { label: "4 Environment · test", value: 78, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
+  { label: "4 Environment · prod", value: 78, detail: "as test" },
+  { label: "5 Data objects", value: 62, detail: "px-lakehouse-data: dev 24 (with its connection) · test 19 · prod 19" },
 ];
 
 // The proof on the test environment x, with the final plans: clock times on 2026-10-31
@@ -611,9 +611,9 @@ const PROOF = [
 
 // [what, who, status]
 const HAND = [
-  ["Add the members to the Entra groups again: persona groups and key vault managers. The new groups are empty.", "You", "To do"],
-  ["Run px-lakehouse-data's <code>scripts/sql-access.sh &lt;env&gt;</code> for each environment. It adds the SQL access connector to the database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and where a connection is listed (dev) the SQL identity (<code>db_datareader</code>), its client secret in the key vault, and the connection. It opens the SQL server to your address for the run only.", "You", "To do"],
-  ["Give <code>metastore_root_location</code>, which Databricks makes with the metastore's root credential, to <code>px-lakehouse-metastore-admins</code>.", "You", "To do"],
+  ["Add the members to the Entra groups again: the key vault managers of each environment, and dev's engineers. Readers and support stay empty for now.", "You", "Done"],
+  ["Run px-lakehouse-data's <code>scripts/sql-access.sh &lt;env&gt;</code> for each environment. It adds the SQL access connector to the database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and where a connection is listed (dev) the SQL identity (<code>db_datareader</code>), its client secret in the key vault, and the connection. It opens the SQL server to your address for the run only.", "You", "Done"],
+  ["Give <code>metastore_root_location</code>, which Databricks makes with the metastore's root credential, to <code>px-lakehouse-metastore-admins</code>.", "You", "Done"],
   ["Drop the catalog <code>main</code>, which Databricks makes with the metastore, open to every workspace.", "Claude", "Done"],
 ];
 
