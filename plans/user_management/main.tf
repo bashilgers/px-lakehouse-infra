@@ -12,7 +12,7 @@ module "user_management" {
     d = {
       workspace_id                 = 1721719261752680
       admin_user_names             = ["bas.hilgers@outlook.com"]
-      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-uc-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data"
+      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data"
       github_repository            = "bashilgers/px-lakehouse-data"
       # GitHub's immutable subject format: owner@owner-id/repo@repo-id. Only dev
       # trusts pull requests (_deploy_identities.tf)
@@ -26,7 +26,7 @@ module "user_management" {
       workspace_id     = 7405610492179459
       admin_user_names = ["bas.hilgers@outlook.com"]
       # A container of its own: dev's holds only dev's state
-      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-uc-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-t"
+      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-t"
       github_repository            = "bashilgers/px-lakehouse-data"
       github_subjects = {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
@@ -37,7 +37,7 @@ module "user_management" {
       workspace_id     = 7405604859706260
       admin_user_names = ["bas.hilgers@outlook.com"]
       # A container of its own: dev's holds only dev's state
-      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-uc-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-p"
+      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-p"
       github_repository            = "bashilgers/px-lakehouse-data"
       github_subjects = {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
