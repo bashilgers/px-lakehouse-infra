@@ -271,8 +271,8 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
     <li><span class="label-inline">State storage.</span> Delete it last, by hand. It has <code>prevent_destroy</code> for this reason.</li>
   </ol>
   <div class="viz-title" style="margin-top: 14px">One environment, built and torn down</div>
-  <div class="viz-sub">The proof on the test environment <code>x</code> with the final plans, 2026-10-31. The teardown includes one retry while the account still counted the deleted workspace.</div>
-  <div class="scroll"><svg id="proof" width="100%" role="img" aria-label="Build and teardown of the test environment x"></svg></div>
+  <div class="viz-sub">The proof on the throwaway environment <code>x</code>, 2026-10-31, UTC: from nothing to a working data platform and back, with the final plans of both repositories, the secret scope and the default catalog included. Step 5 ran locally, as <code>x</code> has no CI. After each build every plan showed no changes, the queues and the foreign catalog answered. The environment's teardown includes one retry while the account still counted the deleted workspace.</div>
+  <div class="scroll"><svg id="proof" width="100%" role="img" aria-label="Build and teardown of the throwaway environment x, the whole flow"></svg></div>
   <details class="table-view"><summary>Show as table</summary><div class="table-wrap" id="proof-table"></div></details>
   <p class="why">The service principals of dev, test and prod predate the delete flag. Until Terraform updates them, a destroy only deactivates them on the account. Delete them with <code>databricks account service-principals delete</code> before you build again.</p>
 </div>
@@ -286,6 +286,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <div class="card">
     <p><span class="label-inline">2026-10-31, morning.</span> Everything was torn down and rebuilt with the old plans. The plans depended on each other in a loop: three plans ran two times, with targeted applies, code changes and manual steps between them.</p>
     <p><span class="label-inline">2026-10-31, afternoon.</span> The loop was removed (px-lakehouse-infra #29). A test environment <code>x</code> proved it: built from zero in one apply, and torn down with one command. Then dev, test and prod moved to the new plans with imports, without a change to a live resource.</p>
+    <p><span class="label-inline">2026-10-31, evening.</span> The secret scope and the default catalog moved into step 4 (#30), and px-lakehouse-data got one apply per environment. All three environments were federated. Then <code>x</code> proved the whole flow, data included: identities, environment, SQL script, data objects, the checks, and the teardown of all of it, in 21 minutes.</p>
   </div>
   <div class="card">
     <div class="viz-title">Timeline of the rebuild with the old plans</div>
@@ -339,7 +340,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td>Criticality tag</td><td>4-not-critical</td><td>4-not-critical</td><td>1-critical</td></tr>
       <tr><td>Deploy SP trusts</td><td>main, GitHub environment dev, pull requests</td><td>main, GitHub environment test</td><td>main, GitHub environment prod</td></tr>
       <tr><td>Engineers</td><td>Also make their own schemas, read the secret scope, and write to SQL through the service credential</td><td>Read only</td><td>Read only</td></tr>
-      <tr><td>Foreign catalog</td><td><code>px_fed_phoenix_sqlsrv_d</code></td><td>–</td><td>–</td></tr>
+      <tr><td>Foreign catalog</td><td><code>px_fed_phoenix_sqlsrv_d</code></td><td><code>px_fed_phoenix_sqlsrv_t</code></td><td><code>px_fed_phoenix_sqlsrv_p</code></td></tr>
     </tbody>
   </table>
 </div>
@@ -401,8 +402,8 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-keyvault-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Service Principal User on the run-as SP, so it can deploy jobs that run as it.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-run-sp</code></td><td>Entra app, Databricks service principal</td><td>Nobody. Jobs run as it. No secret.</td><td>Grants per schema. ACCESS on the SQL service credential. READ on the secret scope. No Azure roles.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-sql-sp</code></td><td>Entra app</td><td>Client secret, made by hand, in the key vault</td><td>db_datareader in the SQL database, for the federation connection. Not in Databricks, no Azure roles. Whoever reads the secret scope can act as it, so it only reads.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>Access connectors</td><td>Managed identities</td><td>Unity Catalog uses them</td><td><code>‹e›-dbr-adls-connector</code>: Blob Data, Queue Data and Account Contributor on the storage account, EventGrid EventSubscription Contributor on the resource group. <code>‹e›-dbr-sqlsrv-connector</code>: db_datareader, db_datawriter, db_ddladmin (by hand). <code>uc-dbr-connector</code>: Blob Data and Queue Data Contributor and EventGrid on the metastore storage.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-sql-sp</code></td><td>Entra app</td><td>Client secret, made by px-lakehouse-data's <code>scripts/sql-access.sh</code>, in the key vault</td><td>db_datareader in the SQL database, for the federation connection. Not in Databricks, no Azure roles. Whoever reads the secret scope can act as it, so it only reads.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>Access connectors</td><td>Managed identities</td><td>Unity Catalog uses them</td><td><code>‹e›-dbr-adls-connector</code>: Blob Data, Queue Data and Account Contributor on the storage account, EventGrid EventSubscription Contributor on the resource group. <code>‹e›-dbr-sqlsrv-connector</code>: db_datareader, db_datawriter, db_ddladmin (<code>scripts/sql-access.sh</code>). <code>uc-dbr-connector</code>: Blob Data and Queue Data Contributor and EventGrid on the metastore storage.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-ent"/></svg>AzureDatabricks</td><td>First-party Entra app</td><td>–</td><td>Key Vault Secrets User on each key vault, for the secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-sp</code></td><td>Entra app, retired</td><td>No valid secret</td><td>Owns the system table provider in Databricks, which nobody can change. Nothing else.</td></tr>
     </tbody>
@@ -414,7 +415,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <table>
     <thead><tr><th>Group</th><th>Entitlements</th><th>Data (grants in px-lakehouse-data)</th></tr></thead>
     <tbody>
-      <tr><td>engineers</td><td>Workspace, Databricks SQL</td><td>Read the whole catalog. In dev also: make their own schemas, read the foreign catalog and the secret scope, write to SQL through the service credential.</td></tr>
+      <tr><td>engineers</td><td>Workspace, Databricks SQL</td><td>Read the whole catalog and the foreign catalog. In dev also: make their own schemas, read the secret scope, write to SQL through the service credential.</td></tr>
       <tr><td>readers</td><td>Databricks SQL only</td><td>SELECT on gold. Nothing else.</td></tr>
       <tr><td>support</td><td>Workspace, Databricks SQL</td><td>SELECT on audit, metadata and bronze. Read the landing volumes.</td></tr>
       <tr><td>run-as SP</td><td>–</td><td>USE CATALOG. Write audit, bronze, silver and gold. Read metadata and the landing volumes.</td></tr>
@@ -442,7 +443,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>landing</code></td><td>External location <code>px_lakehouse_exloc_landing_‹e›</code>, file events on</td><td>Raw files. One volume per source folder, in schema bronze (now <code>ns_api</code>).</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>catalog</code></td><td>External location <code>px_lakehouse_exloc_catalog_‹e›</code>, managed storage of catalog <code>px_ucc_phoenix_‹e›</code></td><td>Every table. Schemas audit, metadata, bronze, silver and gold.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Containers <code>bronze</code>, <code>silver</code>, <code>gold</code></td><td>None</td><td>Not used by Unity Catalog. The layers are schemas in the catalog.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Dev: foreign catalog <code>px_fed_phoenix_sqlsrv_d</code> to read. All: service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Foreign catalog <code>px_fed_phoenix_sqlsrv_‹e›</code> to read. Service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>Key vault <code>px-lakehouse-‹e›-kv</code></td><td>Secret scope <code>px-lakehouse-keyvault</code></td><td>Secrets of the connections and jobs, such as <code>px-lakehouse-d-sql-sp-client-secret</code>.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>metastore</code> in <code>pxlakehouseucsa02</code></td><td>Metastore root</td><td>Managed data at metastore level. The catalogs keep their own storage.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-data</code>, <code>-data-t</code>, <code>-data-p</code>: one per deploy SP.</td></tr>
@@ -516,7 +517,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
 // ---------------------------------------------------------------------------
 // Data. Status: "done", "todo" or "waiting".
 // ---------------------------------------------------------------------------
-const AS_OF = "2026-10-31 18:30 UTC";
+const AS_OF = "2026-10-31 19:20 UTC";
 const STATUS_TEXT = "Built. Every plan shows no changes, px-lakehouse-data's three environments included, and the steps by hand are done. Step 4 also makes the secret scope and sets the default catalog since px-lakehouse-infra #30. Step 5 has its own guide in px-lakehouse-data";
 
 const STEPS = [
@@ -600,13 +601,18 @@ const PLANS = [
   { label: "4 Environment · dev", value: 80, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access" },
   { label: "4 Environment · test", value: 78, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
   { label: "4 Environment · prod", value: 78, detail: "as test" },
-  { label: "5 Data objects", value: 62, detail: "px-lakehouse-data: dev 24 (with its connection) · test 19 · prod 19" },
+  { label: "5 Data objects", value: 72, detail: "px-lakehouse-data: dev, test and prod 24 each, with their SQL connection" },
 ];
 
-// The proof on the test environment x, with the final plans: clock times on 2026-10-31
+// The proof on the throwaway environment x, the whole flow with the final plans: clock times on 2026-10-31, UTC
 const PROOF = [
-  { key: "teardown", label: "Tear down, one command", start: "15:17:44", end: "15:25:49" },
-  { key: "build", label: "Build from zero, one apply", start: "15:25:50", end: "15:32:24" },
+  { label: "2 Identities, x added", start: "18:52:12", end: "18:52:37" },
+  { key: "build", label: "4 Environment x, one apply", start: "18:53:11", end: "19:00:29" },
+  { label: "5 SQL script", start: "19:01:43", end: "19:02:11" },
+  { label: "5 Data objects, one apply", start: "19:02:22", end: "19:02:38" },
+  { label: "Tear down data objects", start: "19:03:14", end: "19:03:32" },
+  { key: "teardown", label: "Tear down environment x", start: "19:03:42", end: "19:12:03" },
+  { label: "Tear down identities", start: "19:12:47", end: "19:13:31" },
 ];
 
 // [what, who, status]
@@ -680,8 +686,8 @@ function renderHeader() {
   const tiles = [
     ["Applies for a build", "6", "one per plan, was 12"],
     ["Steps between applies", "0", "code edits or manual, was 9"],
-    ["One environment, build", span(PROOF.find((r) => r.key === "build")), "one apply (test environment x)"],
-    ["One environment, tear down", span(PROOF.find((r) => r.key === "teardown")), "one command (test environment x)"],
+    ["One environment, build", span(PROOF.find((r) => r.key === "build")), "one apply (throwaway environment x)"],
+    ["One environment, tear down", span(PROOF.find((r) => r.key === "teardown")), "one command (throwaway environment x)"],
   ];
   document.getElementById("tiles").innerHTML = tiles.map(([l, v, s]) =>
     `<div class="card tile"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join("");
@@ -846,7 +852,7 @@ function renderAll() {
   flow.innerHTML = flow.querySelector("title").outerHTML + flow.querySelector("desc").outerHTML;
   ["plans", "compare", "proof", "gantt"].forEach((id) => { document.getElementById(id).innerHTML = ""; });
   renderHeader(); renderFlow(); renderPlans(); renderCompare(); renderSteps(); renderTables();
-  renderGantt("proof", "proof-table", PROOF, "--series-1", 120);
+  renderGantt("proof", "proof-table", PROOF, "--series-1", 300);
   renderGantt("gantt", "gantt-table", TIMELINE, "--series-2", 300);
 }
 renderAll();
@@ -1092,11 +1098,11 @@ const ACCESS = (() => {
       card(c5, 48, "az-sa", "Storage account", "pxlakehouse‹e›sa02", ["pxlakehouse‹e›sa02", "Nobody else holds a data role on it."], 144),
       card(c1, 128, "az-app", "Run-as SP", "jobs run as it", ["px-lakehouse-‹e›-run-sp", "In dev, the engineers also have ACCESS: bundles in development mode run as the developer."]),
       card(c3, 128, "az-dbr", "Service credential", "this workspace only", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Unity Catalog service credential. Owned by the metastore admins, isolated, bound to the workspace."]),
-      card(c4, 128, "az-mi", "sqlsrv connector", "managed identity", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Its user in the database and the roles db_datareader, db_datawriter, db_ddladmin are made by hand."]),
+      card(c4, 128, "az-mi", "sqlsrv connector", "managed identity", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Its user in the database and the roles db_datareader, db_datawriter, db_ddladmin are made by px-lakehouse-data's scripts/sql-access.sh. Serverless jobs write through mssql-python with its token."]),
       card(c5, 128, "az-sqldb", "SQL database", "Entra logins only", ["px-lakehouse-‹e›-sqldb", "Two identities reach it: the sqlsrv connector to write, the SQL SP to read."], 144, 114),
-      card(c1, 198, "az-group", "Engineers", "and the run-as SP", ["Federation", "Dev only, for now. Readers do not see the foreign catalog."]),
-      card(c2, 198, "az-dbr", "Foreign catalog", "dev only, read-only", ["px_fed_phoenix_sqlsrv_d", "On the connection px-lakehouse-d-sqlsrv, database px-lakehouse-d-sqldb."]),
-      card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-d-sqlsrv", "Made by hand with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
+      card(c1, 198, "az-group", "Engineers", "and the run-as SP", ["Federation", "Each environment reads its own database. Readers do not see the foreign catalog."]),
+      card(c2, 198, "az-dbr", "Foreign catalog", "read-only", ["px_fed_phoenix_sqlsrv_‹e›", "On the connection px-lakehouse-‹e›-sqlsrv, database px-lakehouse-‹e›-sqldb."]),
+      card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-‹e›-sqlsrv", "Made by px-lakehouse-data's scripts/sql-access.sh with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
       card(c4, 198, "az-app", "SQL SP", "client secret", ["px-lakehouse-‹e›-sql-sp", "Only db_datareader: whoever reads the secret scope can act as it."]),
       card(c1, 278, "az-group", "Run-as SP, creator", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. In dev, engineers: READ. The admin who applied the plan: MANAGE, as its creator."]),
       card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "Backed by the environment's key vault. Made by the environment plan."]),
