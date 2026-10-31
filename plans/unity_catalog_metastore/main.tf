@@ -2,7 +2,7 @@ module "unity_catalog_metastore" {
   source                      = "../../modules/unity_catalog_metastore"
   subscription_id             = "138f27a5-cb36-412c-a9f0-9b1ba69e0d55"
   databricks_account_id       = "29c54faf-2e22-47d0-b2bb-f894c93010d2"
-  workspace_host              = "https://adb-1721719261752680.0.azuredatabricks.net"
+  workspace_host              = "https://adb-7405619574554186.6.azuredatabricks.net"
   env_admins_group_names      = ["px-lakehouse-d-admins", "px-lakehouse-t-admins", "px-lakehouse-p-admins"]
   metastore_admins_group_name = "px-lakehouse-metastore-admins"
   azure_client_id             = var.azure_client_id
