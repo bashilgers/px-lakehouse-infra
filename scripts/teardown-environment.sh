@@ -6,7 +6,7 @@
 #
 # The lakehouse module guards the environment against a destroy, and a destroy also trips over two things.
 # For this run only, an override file in the module:
-# - lifts prevent_destroy on the storage account and the workspace settings;
+# - lifts prevent_destroy on the catalog container and the workspace settings;
 # - opens the isolated credentials: a destroy deletes their workspace bindings first, after which an isolated
 #   credential is visible to no workspace and can't be deleted;
 # - lets the resource group go with what Azure added to it (network intent policies, Event Grid topics).
@@ -31,7 +31,7 @@ provider "azurerm" {
   }
 }
 
-resource "azurerm_storage_account" "px_storage_account" {
+resource "azurerm_storage_container" "container_catalog" {
   lifecycle {
     prevent_destroy = false
   }
