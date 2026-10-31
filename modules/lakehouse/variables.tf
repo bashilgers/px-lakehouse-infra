@@ -105,9 +105,9 @@ variable "private_endpoint_subnet_address_prefixes" {
   description = "Address space for private endpoint subnet"
 }
 
-variable "workspace_allowed_ip_addresses" {
+variable "allowed_ip_addresses" {
   type        = list(string)
-  description = "IPv4 addresses (CIDR) allowed to reach the Databricks workspace UI and API"
+  description = "IPv4 addresses (CIDR) of the admins, allowed to reach the Databricks workspace UI and API, the storage account and the key vault"
 }
 
 variable "service_endpoints" {

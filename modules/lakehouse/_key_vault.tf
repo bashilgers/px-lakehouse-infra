@@ -17,6 +17,16 @@ resource "azurerm_key_vault" "px_key_vault" {
   purge_protection_enabled    = false
   sku_name                    = "standard"
   tags                        = var.tags
+
+  # Let only these reach the secrets: Databricks for the key vault-backed
+  # secret scope, which needs trusted Microsoft services through, and the
+  # admins' addresses, to manage the secrets. Serverless compute comes in
+  # through the NCC's private endpoint.
+  network_acls {
+    default_action = "Deny"
+    bypass         = "AzureServices"
+    ip_rules       = var.allowed_ip_addresses
+  }
 }
 
 # Look up key vault managers group in entra id (user_management)

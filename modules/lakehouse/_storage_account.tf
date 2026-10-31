@@ -13,6 +13,27 @@ resource "azurerm_storage_account" "px_storage_account" {
   tags                     = var.tags
 }
 
+# Let only these reach the storage account: classic clusters from the
+# workspace's subnets (service endpoint Microsoft.Storage), Unity Catalog as
+# the access connector (a resource instance rule), the admins' addresses, for
+# Terraform's reads of the account and the portal, and trusted Azure services.
+# Serverless compute comes in through the NCC's private endpoints, which the
+# firewall doesn't stop. Separate from the account, as the access connector is
+# made after it.
+resource "azurerm_storage_account_network_rules" "px_storage_account" {
+  storage_account_id         = azurerm_storage_account.px_storage_account.id
+  default_action             = "Deny"
+  bypass                     = ["AzureServices"]
+  virtual_network_subnet_ids = [azurerm_subnet.px_subnet_private.id, azurerm_subnet.px_subnet_public.id]
+  # The storage firewall takes single addresses without /32
+  ip_rules = [for ip in var.allowed_ip_addresses : trimsuffix(ip, "/32")]
+
+  private_link_access {
+    endpoint_resource_id = azurerm_databricks_access_connector.px_dbr_adls_connector.id
+    endpoint_tenant_id   = data.azurerm_client_config.current.tenant_id
+  }
+}
+
 # ===================================================================
 # Create Storage Containers
 # ===================================================================

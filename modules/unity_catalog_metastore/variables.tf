@@ -37,6 +37,11 @@ variable "metastore_admins_group_name" {
   description = "Name of the humans-only account group that owns the metastore"
 }
 
+variable "allowed_ip_addresses" {
+  type        = list(string)
+  description = "IPv4 addresses (CIDR) of the admins, allowed to reach the metastore's storage account"
+}
+
 # ===================================================================
 # Service Principles
 # ===================================================================

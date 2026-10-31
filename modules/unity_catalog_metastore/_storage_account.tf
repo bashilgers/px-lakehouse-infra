@@ -9,6 +9,23 @@ resource "azurerm_storage_account" "uc_storage_account" {
   is_hns_enabled           = true
 }
 
+# Let only these reach the storage account: Unity Catalog as the root
+# credential's access connector (a resource instance rule), the admins'
+# addresses, and trusted Azure services. Separate from the account, as the
+# access connector is made after the metastore, which needs the account.
+resource "azurerm_storage_account_network_rules" "uc_storage_account" {
+  storage_account_id = azurerm_storage_account.uc_storage_account.id
+  default_action     = "Deny"
+  bypass             = ["AzureServices"]
+  # The storage firewall takes single addresses without /32
+  ip_rules = [for ip in var.allowed_ip_addresses : trimsuffix(ip, "/32")]
+
+  private_link_access {
+    endpoint_resource_id = azurerm_databricks_access_connector.uc_access_connector.id
+    endpoint_tenant_id   = azurerm_databricks_access_connector.uc_access_connector.identity[0].tenant_id
+  }
+}
+
 # Add container to the storage account
 resource "azurerm_storage_container" "uc_storage_account" {
   name                  = "metastore"

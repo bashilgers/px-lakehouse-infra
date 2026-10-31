@@ -18,7 +18,7 @@ module "lakehouse" {
   admins_group_name                        = "px-lakehouse-p-admins"
   metastore_admins_group_name              = "px-lakehouse-metastore-admins"
   default_catalog_name                     = "px_ucc_phoenix_p"
-  workspace_allowed_ip_addresses           = ["83.84.179.42/32", "91.201.164.7/32"]
+  allowed_ip_addresses                     = ["83.84.179.42/32", "91.201.164.7/32"]
   # No engineers in prod: they build in dev and test, and nobody reads all of prod's data
   personas = ["readers", "support"]
   tags = {
