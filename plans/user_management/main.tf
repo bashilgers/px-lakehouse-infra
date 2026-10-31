@@ -41,11 +41,5 @@ module "user_management" {
         github-environment-prod = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:environment:prod"
       }
     }
-    # Throwaway environment to prove a build from zero in one pass (plans/x)
-    x = {
-      admin_user_names  = ["bas.hilgers@outlook.com"]
-      github_repository = "bashilgers/px-lakehouse-data"
-      github_subjects   = {}
-    }
   }
 }
