@@ -127,6 +127,10 @@ resource "databricks_storage_credential" "px_dbr_adls_credential" {
   azure_managed_identity {
     access_connector_id = azurerm_databricks_access_connector.px_dbr_adls_connector.id
   }
+
+  # Made through the workspace, so only once it has the metastore, and deleted
+  # before it loses it: a delete after that finds nothing and passes silently
+  depends_on = [databricks_metastore_assignment.px_databricks_workspace_metastore]
 }
 
 # Bind storage credential to the environment's workspace only

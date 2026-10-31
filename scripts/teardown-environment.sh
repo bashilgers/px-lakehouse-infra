@@ -59,11 +59,26 @@ terraform apply -input=false "$@"
 
 # The account counts a deleted workspace for 5 to 11 minutes (2026-10-31), and refuses to delete the network
 # connectivity config while it does. Destroy again until it lets go.
+destroyed=false
 for attempt in $(seq 1 15); do
   if terraform destroy -input=false "$@"; then
-    exit
+    destroyed=true
+    break
   fi
   echo "Destroy failed (attempt $attempt); the account may still count the deleted workspace. Retrying in 2 minutes."
   sleep 120
 done
-exit 1
+$destroyed || exit 1
+
+# A credential delete through a workspace that can't see the credential passes silently. Check through the account
+# API that the storage credential is really gone.
+letter=$(sed -n 's/^ *env *= *"\([a-z]*\)".*/\1/p' main.tf)
+export DATABRICKS_CONFIG_FILE=/dev/null DATABRICKS_HOST=https://accounts.azuredatabricks.net DATABRICKS_AUTH_TYPE=azure-cli
+export DATABRICKS_ACCOUNT_ID=$(sed -n 's/^ *databricks_account_id *= *"\([^"]*\)".*/\1/p' main.tf)
+metastore=$(databricks account metastores list -o json | jq -r '.[] | select(.name == "px-lakehouse-uc-dbr-metastore") | .metastore_id')
+left=$(databricks account storage-credentials list "$metastore" -o json | jq -r --arg n "px-lakehouse-$letter-dbr-adls-connector" '.[]? | select(.name == $n) | .name')
+if [ -n "$left" ]; then
+  echo "Storage credential $left is still in the metastore. Delete it, and the service credential px-lakehouse-$letter-dbr-sqlsrv-connector, by hand." >&2
+  exit 1
+fi
+echo "Torn down: $env"
