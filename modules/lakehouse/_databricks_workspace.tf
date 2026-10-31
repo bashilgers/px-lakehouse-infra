@@ -150,10 +150,11 @@ resource "databricks_mws_network_connectivity_config" "px_ncc" {
 
 # The account refuses to delete the network connectivity config and the
 # network policy while a workspace uses them, and still counts a deleted
-# workspace for a few minutes. The workspace depends on this pause, so on
-# destroy it goes first and the pause runs before those two are deleted.
+# workspace for some minutes (about 5.5 for the network connectivity config on
+# 2026-10-31). The workspace depends on this pause, so on destroy it goes first
+# and the pause runs before those two are deleted.
 resource "time_sleep" "px_ncc_detach" {
-  destroy_duration = "5m"
+  destroy_duration = "10m"
 
   depends_on = [
     databricks_mws_network_connectivity_config.px_ncc,
