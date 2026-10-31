@@ -32,16 +32,6 @@ variable "databricks_account_id" {
   description = "Databricks Account ID"
 }
 
-variable "workspace_host" {
-  type        = string
-  description = "URL of a workspace attached to the metastore, through which metastore grants are made"
-}
-
-variable "env_admins_group_names" {
-  type        = list(string)
-  description = "Names of the environment admin groups, each owning its environment's Unity Catalog objects"
-}
-
 variable "metastore_admins_group_name" {
   type        = string
   description = "Name of the humans-only account group that owns the metastore"

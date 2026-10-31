@@ -97,21 +97,40 @@ resource "azurerm_databricks_workspace" "px_databricks_workspace" {
     public_subnet_name                                   = azurerm_subnet.px_subnet_public.name
     private_subnet_network_security_group_association_id = azurerm_subnet_network_security_group_association.px_subnet_private_nsg.id
     public_subnet_network_security_group_association_id  = azurerm_subnet_network_security_group_association.px_subnet_public_nsg.id
-    storage_account_name                                 = replace("${var.app_name}-${var.env}-dbfs", "-", "")  # ??? can this be pointed to the onelake?
-    storage_account_sku_name                             = "Standard_LRS"  
+    storage_account_name                                 = replace("${var.app_name}-${var.env}-dbfs", "-", "") # ??? can this be pointed to the onelake?
+    storage_account_sku_name                             = "Standard_LRS"
   }
 
   depends_on = [
     azurerm_subnet_network_security_group_association.px_subnet_private_nsg,
-    azurerm_subnet_network_security_group_association.px_subnet_public_nsg
+    azurerm_subnet_network_security_group_association.px_subnet_public_nsg,
+    time_sleep.px_ncc_detach,
   ]
+}
+
+# Look up the region's metastore (unity_catalog_metastore)
+data "databricks_metastore" "px_metastore" {
+  provider = databricks.account
+  name     = var.unity_catalog_metastore_name
 }
 
 # Assign workspace to metastore
 resource "databricks_metastore_assignment" "px_databricks_workspace_metastore" {
   provider     = databricks.account
-  metastore_id = var.unity_catalog_metastore_id
+  metastore_id = data.databricks_metastore.px_metastore.id
   workspace_id = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
+}
+
+# Let the environment's admin group, owner of what px-lakehouse-data creates in
+# it, create catalogs, external locations and connections. Each environment
+# grants its own group; the grant leaves the other groups' privileges alone.
+resource "databricks_grant" "px_metastore_env_admins" {
+  provider   = databricks.workspace
+  metastore  = data.databricks_metastore.px_metastore.id
+  principal  = var.admins_group_name
+  privileges = ["CREATE_CATALOG", "CREATE_CONNECTION", "CREATE_EXTERNAL_LOCATION"]
+
+  depends_on = [databricks_metastore_assignment.px_databricks_workspace_metastore]
 }
 
 # ===================================================================
@@ -120,13 +139,26 @@ resource "databricks_metastore_assignment" "px_databricks_workspace_metastore" {
 # Serverless compute does not run in the vnet. It reaches the storage account,
 # key vault and sql server through private endpoint rules on this config, which
 # live next to each resource. Each rule stays PENDING until it is approved on
-# the target resource.
+# the target resource (_ncc_approvals.tf).
 
 # Create network connectivity config for serverless compute
 resource "databricks_mws_network_connectivity_config" "px_ncc" {
   provider = databricks.account
   name     = "${var.app_name}-${var.env}-ncc"
-  region   = azurerm_databricks_workspace.px_databricks_workspace.location
+  region   = var.location
+}
+
+# The account refuses to delete the network connectivity config and the
+# network policy while a workspace uses them, and still counts a deleted
+# workspace for a few minutes. The workspace depends on this pause, so on
+# destroy it goes first and the pause runs before those two are deleted.
+resource "time_sleep" "px_ncc_detach" {
+  destroy_duration = "5m"
+
+  depends_on = [
+    databricks_mws_network_connectivity_config.px_ncc,
+    databricks_account_network_policy.px_network_policy,
+  ]
 }
 
 # Bind network connectivity config to workspace

@@ -8,8 +8,8 @@ resource "databricks_metastore" "uc_metastore" {
   owner = var.metastore_admins_group_name
 
   lifecycle {
-    # Set outside this resource: the root credential is the access connector
-    # below, and the token lifetime is left at the account's default
+    # Set outside this resource: the root credential is the data access below,
+    # and the token lifetime is left at the account's default
     ignore_changes = [storage_root_credential_name, delta_sharing_recipient_token_lifetime_in_seconds]
   }
 }
@@ -26,22 +26,28 @@ resource "azurerm_databricks_access_connector" "uc_access_connector" {
   depends_on = [databricks_metastore.uc_metastore]
 }
 
-# Provide access to the access connector that will be assumed by Unity Catalog to access data
-resource "databricks_storage_credential" "uc_storage_credential" {
-  provider = databricks.workspace
-  name     = azurerm_databricks_access_connector.uc_access_connector.name
-  # Owned by the metastore admins, not a group with deploy service principles:
-  # whoever owns it can reach all data the access connector can
-  owner = var.metastore_admins_group_name
+# Make the access connector the metastore's root credential, through the
+# account API, so this plan needs no workspace. Owned by the metastore admins,
+# not a group with deploy service principles: whoever owns it can reach all
+# data the access connector can. The provider can't change it once created
+# ("doesn't support update"), so its owner is set here from the start.
+resource "databricks_metastore_data_access" "uc_root_credential" {
+  provider     = databricks.account
+  metastore_id = databricks_metastore.uc_metastore.id
+  name         = azurerm_databricks_access_connector.uc_access_connector.name
+  owner        = var.metastore_admins_group_name
+  is_default   = true
+
   azure_managed_identity {
     access_connector_id = azurerm_databricks_access_connector.uc_access_connector.id
   }
 }
 
-# Was a metastore data access, which can't be updated after it is created.
-# Forget it without deleting, it stays the metastore's root credential.
+# Was a storage credential through a workspace's API. Forget it without
+# deleting; it is the same credential as the data access above, which imports
+# it.
 removed {
-  from = databricks_metastore_data_access.uc_access_connector_data_access
+  from = databricks_storage_credential.uc_storage_credential
   lifecycle {
     destroy = false
   }

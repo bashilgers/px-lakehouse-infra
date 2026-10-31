@@ -2,10 +2,6 @@ locals {
   # Every admin user: of the metastore, and of each environment
   admin_user_names = toset(concat(var.admin_user_names, flatten([for environment in var.environments : environment.admin_user_names])))
 
-  # Environments whose workspace exists, so their identities can be assigned to
-  # it. A new environment's identities come first, as its lakehouse plan looks
-  # them up, then its workspace, then the assignments.
-  workspace_environments = { for env, environment in var.environments : env => environment if environment.workspace_id != null }
 
   # Each environment's admin users, one entry per environment and user
   env_admin_users = merge([
@@ -50,15 +46,6 @@ resource "databricks_group_member" "px_env_admins_deploy_sp" {
   provider  = databricks.account
   group_id  = databricks_group.px_env_admins[each.key].id
   member_id = databricks_service_principal.px_deploy_sp[each.key].id
-}
-
-# Give environment's admin group access to its own workspace only
-resource "databricks_mws_permission_assignment" "px_env_admins" {
-  for_each     = local.workspace_environments
-  provider     = databricks.account
-  workspace_id = each.value.workspace_id
-  principal_id = databricks_group.px_env_admins[each.key].id
-  permissions  = ["USER"]
 }
 
 # ===================================================================

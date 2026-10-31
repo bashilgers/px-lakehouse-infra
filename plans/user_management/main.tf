@@ -10,7 +10,6 @@ module "user_management" {
   group_owner_object_ids = ["c0071a22-3f84-4337-ad09-871f52c3a1ba"]
   environments = {
     d = {
-      workspace_id                 = 7405619574554186
       admin_user_names             = ["bas.hilgers@outlook.com"]
       terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data"
       github_repository            = "bashilgers/px-lakehouse-data"
@@ -23,7 +22,6 @@ module "user_management" {
       }
     }
     t = {
-      workspace_id     = 7405605769926036
       admin_user_names = ["bas.hilgers@outlook.com"]
       # A container of its own: dev's holds only dev's state
       terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-t"
@@ -34,7 +32,6 @@ module "user_management" {
       }
     }
     p = {
-      workspace_id     = 7405604947705518
       admin_user_names = ["bas.hilgers@outlook.com"]
       # A container of its own: dev's holds only dev's state
       terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-p"
@@ -43,6 +40,12 @@ module "user_management" {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
         github-environment-prod = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:environment:prod"
       }
+    }
+    # Throwaway environment to prove a build from zero in one pass (plans/x)
+    x = {
+      admin_user_names  = ["bas.hilgers@outlook.com"]
+      github_repository = "bashilgers/px-lakehouse-data"
+      github_subjects   = {}
     }
   }
 }

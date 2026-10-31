@@ -9,8 +9,16 @@ terraform {
       version = "~>3.0"
     }
     databricks = {
-      source = "databricks/databricks"
+      source  = "databricks/databricks"
       version = ">=1.52.0"
+    }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~>2.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = "~>0.12"
     }
   }
 }
@@ -26,6 +34,10 @@ provider "databricks" {
 provider "databricks" {
   alias = "workspace"
   host  = "https://${azurerm_databricks_workspace.px_databricks_workspace.workspace_url}"
+}
+
+provider "azapi" {
+  subscription_id = var.subscription_id
 }
 
 provider "azurerm" {
