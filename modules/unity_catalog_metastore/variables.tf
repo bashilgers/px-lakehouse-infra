@@ -27,11 +27,6 @@ variable "subscription_id" {
   description = "Azure Subscription ID to deploy the workspace into (pu)"
 }
 
-variable "workspace_host" {
-  type        = string
-  description = "URL of a workspace attached to the metastore, only to forget what used a workspace's API"
-}
-
 variable "databricks_account_id" {
   type        = string
   description = "Databricks Account ID"

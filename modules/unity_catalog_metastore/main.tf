@@ -9,13 +9,6 @@ terraform {
   }
 }
 
-# Only for forgetting the storage credential and the grants that used a
-# workspace's API (removed blocks). Goes once they are out of the state.
-provider "databricks" {
-  alias = "workspace"
-  host  = var.workspace_host
-}
-
 provider "azurerm" {
   subscription_id = var.subscription_id
   features {}

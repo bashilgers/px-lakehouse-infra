@@ -42,13 +42,3 @@ resource "databricks_metastore_data_access" "uc_root_credential" {
     access_connector_id = azurerm_databricks_access_connector.uc_access_connector.id
   }
 }
-
-# Was a storage credential through a workspace's API. Forget it without
-# deleting; it is the same credential as the data access above, which imports
-# it.
-removed {
-  from = databricks_storage_credential.uc_storage_credential
-  lifecycle {
-    destroy = false
-  }
-}
