@@ -33,3 +33,25 @@ resource "databricks_entitlements" "px_persona" {
   workspace_access      = each.value.workspace_access
   databricks_sql_access = each.value.databricks_sql_access
 }
+
+# ===================================================================
+# Deploy Service Principle Entitlements
+# ===================================================================
+# The environment's deploy service principle (user_management) applies
+# px-lakehouse-data's Terraform through the workspace's APIs, which refuse a
+# caller without the workspace or Databricks SQL entitlement. It gets both, as
+# dev's had by hand before this.
+
+# Look up deploy service principle in the workspace, where user_management assigned it
+data "databricks_service_principal" "px_deploy_sp_workspace" {
+  provider       = databricks.workspace
+  application_id = data.databricks_service_principal.px_deploy_sp.application_id
+}
+
+# Give deploy service principle its entitlements in the workspace
+resource "databricks_entitlements" "px_deploy_sp" {
+  provider              = databricks.workspace
+  service_principal_id  = data.databricks_service_principal.px_deploy_sp_workspace.id
+  workspace_access      = true
+  databricks_sql_access = true
+}
