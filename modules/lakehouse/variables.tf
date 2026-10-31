@@ -53,7 +53,13 @@ variable "admins_group_name" {
 
 variable "metastore_admins_group_name" {
   type        = string
-  description = "Name of the humans-only account group that owns the metastore"
+  description = "Name of the humans-only account group that owns the metastore, and manages the secret scope"
+}
+
+variable "personas" {
+  type        = list(string)
+  default     = ["engineers", "readers", "support"]
+  description = "The environment's persona groups (user_management), each px-lakehouse-<env>-<persona>"
 }
 
 variable "default_catalog_name" {
@@ -139,14 +145,9 @@ variable "sql_location" {
   description = "The location of Azure Data center for the SQL server (westeurope refuses new SQL servers)"
 }
 
-variable "sql_entra_admin_login" {
+variable "platform_admins_group_name" {
   type        = string
-  description = "Login name of the Entra ID user that administers the SQL server"
-}
-
-variable "sql_entra_admin_object_id" {
-  type        = string
-  description = "Object ID of the Entra ID user that administers the SQL server"
+  description = "Name of the Entra ID group of the admin users (terraform_state), which administers the SQL server"
 }
 
 variable "sql_writers" {

@@ -13,8 +13,7 @@ module "lakehouse" {
   public_subnet_address_prefixes           = ["10.1.2.0/24"]
   private_endpoint_subnet_address_prefixes = ["10.1.3.0/24"]
   sql_location                             = "germanywestcentral"
-  sql_entra_admin_login                    = "bas.hilgers@outlook.com"
-  sql_entra_admin_object_id                = "c0071a22-3f84-4337-ad09-871f52c3a1ba"
+  platform_admins_group_name               = "px-lakehouse-platform-admins"
   azure_databricks_object_id               = "78477c4b-9331-4168-8644-5d13b5e5a7de"
   admins_group_name                        = "px-lakehouse-d-admins"
   metastore_admins_group_name              = "px-lakehouse-metastore-admins"
