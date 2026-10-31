@@ -104,7 +104,9 @@ resource "azurerm_databricks_workspace" "px_databricks_workspace" {
   depends_on = [
     azurerm_subnet_network_security_group_association.px_subnet_private_nsg,
     azurerm_subnet_network_security_group_association.px_subnet_public_nsg,
-    time_sleep.px_ncc_detach,
+    # In use by the workspace, so deleted after it (teardown)
+    databricks_mws_network_connectivity_config.px_ncc,
+    databricks_account_network_policy.px_network_policy,
   ]
 }
 
@@ -148,18 +150,16 @@ resource "databricks_mws_network_connectivity_config" "px_ncc" {
   region   = var.location
 }
 
-# The account refuses to delete the network connectivity config and the
-# network policy while a workspace uses them, and still counts a deleted
-# workspace for some minutes (about 5.5 for the network connectivity config on
-# 2026-10-31). The workspace depends on this pause, so on destroy it goes first
-# and the pause runs before those two are deleted.
-resource "time_sleep" "px_ncc_detach" {
-  destroy_duration = "10m"
-
-  depends_on = [
-    databricks_mws_network_connectivity_config.px_ncc,
-    databricks_account_network_policy.px_network_policy,
-  ]
+# Destroyed before the workspace was, in a run that destroys it. The account
+# refuses to delete the network connectivity config and the network policy
+# while a workspace uses them, and counts a deleted workspace for 5 to 11
+# minutes (2026-10-31); scripts/teardown-environment.sh retries until it lets
+# go. Forget it here; it goes with the time provider once out of the state.
+removed {
+  from = time_sleep.px_ncc_detach
+  lifecycle {
+    destroy = false
+  }
 }
 
 # Bind network connectivity config to workspace

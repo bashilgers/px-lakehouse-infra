@@ -10,7 +10,8 @@
 # - opens the isolated credentials: a destroy deletes their workspace bindings first, after which an isolated
 #   credential is visible to no workspace and can't be deleted;
 # - lets the resource group go with what Azure added to it (network intent policies, Event Grid topics).
-# The apply opens the credentials; the destroy then removes everything. The override file is always removed again.
+# The apply opens the credentials; the destroy then removes everything, retried while the account still counts the
+# deleted workspace. The override file is always removed again.
 
 set -euo pipefail
 env=$1
@@ -55,4 +56,14 @@ EOF
 cd "$root/plans/$env"
 terraform init -input=false
 terraform apply -input=false "$@"
-terraform destroy -input=false "$@"
+
+# The account counts a deleted workspace for 5 to 11 minutes (2026-10-31), and refuses to delete the network
+# connectivity config while it does. Destroy again until it lets go.
+for attempt in $(seq 1 15); do
+  if terraform destroy -input=false "$@"; then
+    exit
+  fi
+  echo "Destroy failed (attempt $attempt); the account may still count the deleted workspace. Retrying in 2 minutes."
+  sleep 120
+done
+exit 1
