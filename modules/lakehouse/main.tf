@@ -12,10 +12,6 @@ terraform {
       source  = "databricks/databricks"
       version = ">=1.52.0"
     }
-    azapi = {
-      source  = "azure/azapi"
-      version = "~>2.0"
-    }
     time = {
       source  = "hashicorp/time"
       version = "~>0.12"
@@ -34,12 +30,6 @@ provider "databricks" {
 provider "databricks" {
   alias = "workspace"
   host  = "https://${azurerm_databricks_workspace.px_databricks_workspace.workspace_url}"
-}
-
-# Only to forget the approvals that were azapi_update_resource before
-# (_ncc_approvals.tf). Goes once they are out of the state.
-provider "azapi" {
-  subscription_id = var.subscription_id
 }
 
 provider "azurerm" {
