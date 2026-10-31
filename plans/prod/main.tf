@@ -19,6 +19,9 @@ module "lakehouse" {
   admins_group_name                        = "px-lakehouse-p-admins"
   metastore_admins_group_name              = "px-lakehouse-metastore-admins"
   workspace_allowed_ip_addresses           = ["83.84.179.42/32", "91.201.164.7/32"]
+  sql_writers = [
+    "650c4aaa-49de-4200-a64a-b4182822573f", # px-lakehouse-p-run-sp, the run-as identity
+  ]
   tags = {
     app                 = "px-lakehouse"
     app-sme             = "bas.hilgers@outlook.com"

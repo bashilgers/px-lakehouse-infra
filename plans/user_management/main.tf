@@ -23,22 +23,22 @@ module "user_management" {
       }
     }
     t = {
-      workspace_id = 7405610492179459
-      # terraform_state_container_id: none yet, px-lakehouse-data has no test
-      # environment, and its one container holds dev's state too
-      admin_user_names  = ["bas.hilgers@outlook.com"]
-      github_repository = "bashilgers/px-lakehouse-data"
+      workspace_id     = 7405610492179459
+      admin_user_names = ["bas.hilgers@outlook.com"]
+      # A container of its own: dev's holds only dev's state
+      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-uc-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-t"
+      github_repository            = "bashilgers/px-lakehouse-data"
       github_subjects = {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
         github-environment-test = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:environment:test"
       }
     }
     p = {
-      workspace_id = 7405604859706260
-      # terraform_state_container_id: none yet, px-lakehouse-data has no prod
-      # environment, and its one container holds dev's state too
-      admin_user_names  = ["bas.hilgers@outlook.com"]
-      github_repository = "bashilgers/px-lakehouse-data"
+      workspace_id     = 7405604859706260
+      admin_user_names = ["bas.hilgers@outlook.com"]
+      # A container of its own: dev's holds only dev's state
+      terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-uc-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-data-p"
+      github_repository            = "bashilgers/px-lakehouse-data"
       github_subjects = {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
         github-environment-prod = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:environment:prod"
