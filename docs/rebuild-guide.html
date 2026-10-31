@@ -226,7 +226,7 @@ for env in dev test prod; do                       # 4. in parallel, about 8 min
 done; wait
 
 # 5. in px-lakehouse-data (its docs/build-guide.html): per environment, scripts/sql-access.sh,
-#    then one CI run (Actions > databricks-infra > Run workflow). Dev's waits on the script.
+#    then one CI run (Actions > databricks-infra > Run workflow). Each waits on its script.
 for env in dev test prod; do scripts/sql-access.sh $env; done
 for env in dev test prod; do gh workflow run databricks-infra.yml --ref main -f environment=$env; done</code></pre>
 <p style="margin: 0">To tear down, after px-lakehouse-data's objects:</p>
@@ -315,7 +315,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
 <header>
   <h1>px-lakehouse: architecture</h1>
   <p class="lede">What the platform is made of, where each part lives, how the network connects the parts, and who can reach what. Dev, test and prod are three copies of one Terraform module, each in its own subscription. One metastore and one state account serve all three.</p>
-  <p class="meta">From the code of px-lakehouse-infra (branch single-pass-build) and px-lakehouse-data on 2026-10-31. In names, ‹e› is d, t or p, and ‹n› is 1, 2 or 3. Point at a box in a diagram for its details.</p>
+  <p class="meta">From the code of px-lakehouse-infra and px-lakehouse-data on main, 2026-10-31. In names, ‹e› is d, t or p, and ‹n› is 1, 2 or 3. Point at a box in a diagram for its details.</p>
 </header>
 
 <section class="tiles" aria-label="At a glance">
@@ -356,7 +356,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
     </tbody>
   </table>
 </div>
-<p class="meta" style="margin-top: 8px">A fourth environment, <code>x</code> (plans/x, 10.9.0.0/16, in the dev subscription), uses the same module. It is a throwaway, to prove a build from zero.</p>
+<p class="meta" style="margin-top: 8px">A throwaway environment, <code>x</code> (10.9.0.0/16, in the dev subscription), used the same module twice on 2026-10-31, to prove a build from zero (section 7 of the build guide). It was torn down each time and is not in the code.</p>
 
 <h2 id="arch-network">2. Network</h2>
 <p>Classic clusters run in the environment's VNet without public IP addresses. They reach the control plane through a private endpoint, and the internet through a NAT gateway. Serverless compute runs outside the VNet. It reaches the data through private endpoints from the NCC. People reach the workspace over the internet. The network policy lets in only two IP addresses and the deploy SP.</p>
@@ -568,7 +568,7 @@ const STEPS = [
     goal: "Make the external locations, catalogs, schemas, volumes and the federation. px-lakehouse-data's docs/build-guide.html has the steps.",
     do: [
       "After a rebuild, put the new IDs in <code>infra/envs/*</code> (workspace host and ID, metastore ID, run-as IDs) and in <code>DEPLOY_CLIENT_IDS</code> of the workflow. Section 8 has them.",
-      "Run <code>scripts/sql-access.sh &lt;env&gt;</code> where the tfvars list a SQL connection (dev): the connection must exist before its apply.",
+      "Run <code>scripts/sql-access.sh &lt;env&gt;</code> for the environment: the connection in its tfvars must exist before its apply.",
       "Run the workflow once per environment: Actions &gt; databricks-infra &gt; Run workflow.",
     ],
     check: "Each run applies 19 objects (dev: 24, with its connection). The next plan shows no changes.",
@@ -630,7 +630,7 @@ const PROOF = [
 // [what, who, status]
 const HAND = [
   ["Add the members to the Entra groups again: the key vault managers of each environment, and dev's engineers. Readers and support stay empty for now.", "You", "Done"],
-  ["Run px-lakehouse-data's <code>scripts/sql-access.sh &lt;env&gt;</code> for each environment. It adds the SQL access connector to the database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and where a connection is listed (dev) the SQL identity (<code>db_datareader</code>), its client secret in the key vault, and the connection. It opens the SQL server to your address for the run only.", "You", "Done"],
+  ["Run px-lakehouse-data's <code>scripts/sql-access.sh &lt;env&gt;</code> for each environment. It adds the SQL access connector to the database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and the SQL identity (<code>db_datareader</code>), its client secret in the key vault, and the connection. It opens the SQL server to your address for the run only.", "You", "Done"],
   ["Give <code>metastore_root_location</code>, which Databricks makes with the metastore's root credential, to <code>px-lakehouse-metastore-admins</code>.", "You", "Done"],
   ["Drop the catalog <code>main</code>, which Databricks makes with the metastore, open to every workspace.", "Claude", "Done"],
 ];
