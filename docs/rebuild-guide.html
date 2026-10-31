@@ -132,10 +132,51 @@
   th { color: var(--ink-2); font-weight: 600; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .table-wrap { overflow-x: auto; }
+
+  /* pages */
+  [hidden] { display: none !important; }
+  .pages { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 24px; background: var(--surface-2); border-radius: 10px; box-shadow: 0 0 0 1px var(--ring); }
+  .pages a { padding: 5px 14px; border-radius: 7px; color: var(--ink-2); text-decoration: none; font-size: 13px; font-weight: 600; }
+  .pages a[aria-current="page"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--ring); }
+  .toc { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  .figcap { color: var(--ink-2); font-size: 13px; margin: 10px 0 0; max-width: 80ch; }
+  .card + h3, .table-wrap + h3, p + h3 { margin-top: 22px; }
+  h3 + .card, h3 + p { margin-top: 8px; }
+  .ti { width: 18px; height: 18px; vertical-align: -4px; margin-right: 6px; flex: none; }
+  td.name { white-space: nowrap; }
+
+  /* architecture diagrams: colours come from these classes, so a theme change needs no new render */
+  .dg { display: block; width: 100%; height: auto; min-width: 820px; }
+  .dg .zone { fill: none; stroke: var(--axis); stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .dg .zone.stacked { fill: var(--surface); }
+  .dg .zone.sub { stroke: var(--accent); }
+  .dg .zone.dbx { stroke: #e2533c; }
+  .dg .zone.vnet { stroke: #6aa52c; }
+  .dg .zone.subnet { fill: var(--surface-2); stroke: var(--grid); stroke-dasharray: none; }
+  .dg .zlbl { font-size: 11.5px; font-weight: 600; fill: var(--ink); }
+  .dg .zsub { font-size: 10px; fill: var(--ink-2); }
+  .dg .colhead { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; fill: var(--muted); }
+  .dg .node { color: var(--ink-2); outline: none; }
+  .dg .node rect { fill: var(--surface); stroke: var(--axis); stroke-width: 1; }
+  .dg .node:hover rect, .dg .node:focus rect { stroke: var(--accent); stroke-width: 1.5; }
+  .dg .nlbl { font-size: 11.5px; font-weight: 600; fill: var(--ink); }
+  .dg .nsub { font-size: 10px; fill: var(--ink-2); }
+  .dg .edge { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+  .dg .edge.dash { stroke-dasharray: 5 4; }
+  .dg .divider { fill: none; stroke: var(--grid); stroke-width: 1; }
+  .dg .arrowhead { fill: var(--muted); }
+  .dg .elbl { font-size: 10px; fill: var(--ink-2); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
 </style>
 </head>
 <body>
 <main>
+
+<nav class="pages" aria-label="Pages">
+  <a href="#guide" data-page="guide">Build guide</a>
+  <a href="#architecture" data-page="arch">Architecture</a>
+</nav>
+
+<div class="page" id="page-guide">
 
 <header>
   <h1>px-lakehouse: build from zero</h1>
@@ -253,6 +294,217 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
     <div class="scroll"><svg id="gantt" width="100%" role="img" aria-label="Timeline of the rebuild with the old plans"></svg></div>
     <details class="table-view"><summary>Show as table</summary><div class="table-wrap" id="gantt-table"></div></details>
   </div>
+</div>
+
+</div>
+
+<div class="page" id="page-arch" hidden>
+
+<header>
+  <h1>px-lakehouse: architecture</h1>
+  <p class="lede">What the platform is made of, where each part lives, how the network connects the parts, and who can reach what. Dev, test and prod are three copies of one Terraform module, each in its own subscription. One metastore and one state account serve all three.</p>
+  <p class="meta">From the code of px-lakehouse-infra (branch single-pass-build) and px-lakehouse-data on 2026-10-31. In names, ‹e› is d, t or p, and ‹n› is 1, 2 or 3. Point at a box in a diagram for its details.</p>
+</header>
+
+<section class="tiles" aria-label="At a glance">
+  <div class="card tile"><div class="label">Environments</div><div class="value">3</div><div class="sub">dev, test, prod: a subscription each</div></div>
+  <div class="card tile"><div class="label">Region</div><div class="value">westeurope</div><div class="sub">SQL servers in germanywestcentral</div></div>
+  <div class="card tile"><div class="label">Private endpoints</div><div class="value">7</div><div class="sub">per environment: 2 in the VNet, 5 for serverless</div></div>
+  <div class="card tile"><div class="label">Client secrets</div><div class="value">1</div><div class="sub">per environment: the SQL SP's, in the key vault</div></div>
+</section>
+
+<ul class="toc" aria-label="Sections">
+  <li><a href="#arch-overview">1. Where things live</a></li>
+  <li><a href="#arch-network">2. Network</a></li>
+  <li><a href="#arch-access">3. Access</a></li>
+  <li><a href="#arch-data">4. Data layout</a></li>
+  <li><a href="#arch-resources">5. Resource list</a></li>
+  <li><a href="#arch-gaps">6. Points to know</a></li>
+</ul>
+
+<h2 id="arch-overview">1. Where things live</h2>
+<p>Each environment has its own subscription with one resource group. The resource groups hold the same resources. Only the names and the address ranges are different. The prod subscription also holds the metastore storage and the Terraform state. Entra ID holds the groups and the app registrations. The Databricks account holds the metastore, and for each workspace its network objects.</p>
+<div class="card">
+  <div class="scroll"><svg id="arch-overview-svg" class="dg" viewBox="0 0 1000 556" role="img" aria-label="Containment of the platform: one subscription per environment with one resource group, the Entra ID tenant, the Databricks account with the metastore, and the shared resources in the prod subscription."></svg></div>
+  <p class="figcap">One environment is drawn, and the two cards behind it are the other two. The three lines show what crosses a boundary: each workspace is assigned to the one metastore, the metastore keeps its root storage in the prod subscription, and the persona groups go from Entra ID into the Databricks account.</p>
+</div>
+
+<h3>What is different per environment</h3>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th></th><th>dev</th><th>test</th><th>prod</th></tr></thead>
+    <tbody>
+      <tr><td>Subscription</td><td><code>1ab862af-7c5d-4085-ae0b-af6407432de5</code></td><td><code>3e6ff8b5-2c9b-48bb-b5fb-6b513b3e1dab</code></td><td><code>138f27a5-cb36-412c-a9f0-9b1ba69e0d55</code></td></tr>
+      <tr><td>VNet</td><td>10.1.0.0/16</td><td>10.2.0.0/16</td><td>10.3.0.0/16</td></tr>
+      <tr><td>Workspace</td><td>adb-7405619574554186.6</td><td>adb-7405605769926036.16</td><td>adb-7405604947705518.18</td></tr>
+      <tr><td>Criticality tag</td><td>4-not-critical</td><td>4-not-critical</td><td>1-critical</td></tr>
+      <tr><td>Deploy SP trusts</td><td>main, GitHub environment dev, pull requests</td><td>main, GitHub environment test</td><td>main, GitHub environment prod</td></tr>
+      <tr><td>Engineers</td><td>Also make their own schemas, read the secret scope, and write to SQL through the service credential</td><td>Read only</td><td>Read only</td></tr>
+      <tr><td>Foreign catalog</td><td><code>px_fed_phoenix_sqlsrv_d</code></td><td>–</td><td>–</td></tr>
+    </tbody>
+  </table>
+</div>
+<p class="meta" style="margin-top: 8px">A fourth environment, <code>x</code> (plans/x, 10.9.0.0/16, in the dev subscription), uses the same module. It is a throwaway, to prove a build from zero.</p>
+
+<h2 id="arch-network">2. Network</h2>
+<p>Classic clusters run in the environment's VNet without public IP addresses. They reach the control plane through a private endpoint, and the internet through a NAT gateway. Serverless compute runs outside the VNet. It reaches the data through private endpoints from the NCC. People reach the workspace over the internet. The network policy lets in only two IP addresses and the deploy SP.</p>
+<div class="card">
+  <div class="scroll"><svg id="arch-network-svg" class="dg" viewBox="0 0 1000 610" role="img" aria-label="Network of one environment: users and CI reach the workspace through the network policy; classic clusters in the VNet reach the control plane and the SQL server through private endpoints, storage through a service endpoint and the internet through a NAT gateway; serverless compute reaches storage, key vault and SQL through five NCC private endpoints."></svg></div>
+  <p class="figcap">One environment. Solid lines use private addresses. Dashed lines go to a public endpoint. Red dashed border: runs in Databricks' subscriptions. Blue-green dashed border: the environment's own VNet.</p>
+</div>
+
+<h3>Ways in and out</h3>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>From → to</th><th>Route</th><th>Control</th></tr></thead>
+    <tbody>
+      <tr><td>People → workspace UI and API</td><td>Internet, to the public front end</td><td>Network policy <code>px-lakehouse-‹e›-network-policy</code> lets in only 83.84.179.42/32 and 91.201.164.7/32. It lives on the account, so you can fix a wrong range there even when the workspace refuses you.</td></tr>
+      <tr><td>CI → workspace API</td><td>Internet</td><td>The same policy lets in the deploy SP from any address, by identity, for the API only. GitHub's runners have no fixed address.</td></tr>
+      <tr><td>Classic clusters → control plane</td><td>Private endpoint <code>px-lakehouse-‹e›-dbr-pe</code> (databricks_ui_api), DNS zone privatelink.azuredatabricks.net</td><td>Not over the internet, so Databricks adds no rules to the NSG (NoAzureDatabricksRules).</td></tr>
+      <tr><td>Classic clusters → internet</td><td>NAT gateway <code>px-lakehouse-‹e›-nat</code> with static IP <code>px-lakehouse-‹e›-public-ip</code></td><td>On the public (host) subnet. Nothing filters this traffic.</td></tr>
+      <tr><td>Classic clusters → storage account</td><td>Service endpoint Microsoft.Storage on both Databricks subnets</td><td>The storage account has no firewall. Access rests on Entra ID roles.</td></tr>
+      <tr><td>Classic clusters → SQL server</td><td>Private endpoint <code>px-lakehouse-‹e›-sqlsrv-pe</code>, DNS zone privatelink.database.windows.net</td><td>The SQL server has public network access off. The endpoint is in westeurope, the server in germanywestcentral.</td></tr>
+      <tr><td>Serverless → storage (blob, dfs, queue), key vault, SQL server</td><td>NCC <code>px-lakehouse-‹e›-ncc</code>: five private endpoint rules</td><td>Each rule waits for approval on its target. The environment plan approves it with the Azure CLI. Other serverless traffic out is not restricted (FULL_ACCESS).</td></tr>
+      <tr><td>Control plane → key vault</td><td>Public endpoint</td><td>The AzureDatabricks app reads the secrets for the secret scope (Key Vault Secrets User).</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>Address ranges</h3>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Subnet</th><th>Holds</th><th>dev</th><th>test</th><th>prod</th></tr></thead>
+    <tbody>
+      <tr><td class="name">private</td><td>Databricks containers. NSG, route table, service endpoints.</td><td>10.1.1.0/24</td><td>10.2.1.0/24</td><td>10.3.1.0/24</td></tr>
+      <tr><td class="name">public</td><td>Databricks hosts. NSG, route table, service endpoints, NAT gateway.</td><td>10.1.2.0/24</td><td>10.2.2.0/24</td><td>10.3.2.0/24</td></tr>
+      <tr><td class="name">private-endpoints</td><td>dbr-pe and sqlsrv-pe.</td><td>10.1.3.0/24</td><td>10.2.3.0/24</td><td>10.3.3.0/24</td></tr>
+    </tbody>
+  </table>
+</div>
+<p class="meta" style="margin-top: 8px">Subnet names are <code>px-lakehouse-‹e›-subnet-‹name›</code>. Both Databricks subnets are delegated to Microsoft.Databricks/workspaces and have service endpoints for Storage, Sql, EventHub and AzureActiveDirectory.</p>
+
+<h2 id="arch-access">3. Access</h2>
+<p>People get access through groups only, never one by one. Jobs run as the run-as SP. CI deploys as the deploy SP. Neither people nor jobs hold an Azure role on the lake or on the SQL database. They hold Unity Catalog grants, and Unity Catalog reaches Azure for them.</p>
+<div class="card">
+  <div class="scroll"><svg id="arch-access-svg" class="dg" viewBox="0 0 1000 500" role="img" aria-label="Access paths, left to right: who holds a grant, the Unity Catalog object, what Unity Catalog uses, the Azure identity, and the Azure resource. Lake data goes through an access connector's managed identity, SQL writes through a service credential, SQL reads through the federation connection as the SQL SP, secrets through the AzureDatabricks app. Below a line: Azure roles that the key vault managers and the deploy SP hold directly."></svg></div>
+  <p class="figcap">Read each row from left to right: it is one way to the data. Above the line, Databricks is between the identity and the data. Below the line, the Azure roles that groups and CI hold directly.</p>
+</div>
+
+<h3>Identities</h3>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Identity</th><th>Kind</th><th>Signs in</th><th>Reaches</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-user"/></svg>Admin users</td><td>Entra users, Databricks account admins</td><td><code>az login</code></td><td>Owner of the three subscriptions. Members of the metastore admins and of each environment admin group. Entra admin of the SQL servers. Read and write every Terraform state. Manage the run-as SPs.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, its root credential, and each environment's storage and service credential.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-admins</code></td><td>Databricks account group: the admin users and the environment's deploy SP</td><td>–</td><td>USER on its own workspace. Owns what px-lakehouse-data makes. CREATE CATALOG, CONNECTION and EXTERNAL LOCATION on the metastore. CREATE EXTERNAL LOCATION on the storage credential. MANAGE on the secret scope.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Their members are set in Entra ID, not in the code.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-keyvault-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Service Principal User on the run-as SP, so it can deploy jobs that run as it.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-run-sp</code></td><td>Entra app, Databricks service principal</td><td>Nobody. Jobs run as it. No secret.</td><td>Grants per schema. ACCESS on the SQL service credential. READ on the secret scope. No Azure roles.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-sql-sp</code></td><td>Entra app</td><td>Client secret, made by hand, in the key vault</td><td>db_datareader in the SQL database, for the federation connection. Not in Databricks, no Azure roles. Whoever reads the secret scope can act as it, so it only reads.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>Access connectors</td><td>Managed identities</td><td>Unity Catalog uses them</td><td><code>‹e›-dbr-adls-connector</code>: Blob Data, Queue Data and Account Contributor on the storage account, EventGrid EventSubscription Contributor on the resource group. <code>‹e›-dbr-sqlsrv-connector</code>: db_datareader, db_datawriter, db_ddladmin (by hand). <code>uc-dbr-connector</code>: Blob Data and Queue Data Contributor and EventGrid on the metastore storage.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-ent"/></svg>AzureDatabricks</td><td>First-party Entra app</td><td>–</td><td>Key Vault Secrets User on each key vault, for the secret scope.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-sp</code></td><td>Entra app, retired</td><td>No valid secret</td><td>Owns the system table provider in Databricks, which nobody can change. Nothing else.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>What each persona gets</h3>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Group</th><th>Entitlements</th><th>Data (grants in px-lakehouse-data)</th></tr></thead>
+    <tbody>
+      <tr><td>engineers</td><td>Workspace, Databricks SQL</td><td>Read the whole catalog. In dev also: make their own schemas, read the foreign catalog and the secret scope, write to SQL through the service credential.</td></tr>
+      <tr><td>readers</td><td>Databricks SQL only</td><td>SELECT on gold. Nothing else.</td></tr>
+      <tr><td>support</td><td>Workspace, Databricks SQL</td><td>SELECT on audit, metadata and bronze. Read the landing volumes.</td></tr>
+      <tr><td>run-as SP</td><td>–</td><td>USE CATALOG. Write audit, bronze, silver and gold. Read metadata and the landing volumes.</td></tr>
+      <tr><td>account users</td><td>None: the workspace's users group has no entitlements</td><td>BROWSE on the catalog.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h3>Workspace settings</h3>
+<div class="card">
+  <ul class="plain">
+    <li>Personal access tokens are off. Nobody can make one. CI, Terraform and the CLI log in through Entra ID.</li>
+    <li>Git folders work only with repositories under <code>https://github.com/bashilgers/</code>.</li>
+    <li>Users see only the notebooks, clusters and jobs that they have a permission on.</li>
+    <li>An assignment to the workspace alone gives no access. Each persona group and the deploy SP get their own entitlements.</li>
+  </ul>
+</div>
+
+<h2 id="arch-data">4. Data layout</h2>
+<p>Unity Catalog owns the data. The storage account has five containers, and Unity Catalog uses two: <code>landing</code> for raw files and <code>catalog</code> for every table.</p>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Where</th><th>Unity Catalog object</th><th>Holds</th></tr></thead>
+    <tbody>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>landing</code></td><td>External location <code>px_lakehouse_exloc_landing_‹e›</code>, file events on</td><td>Raw files. One volume per source folder, in schema bronze (now <code>ns_api</code>).</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>catalog</code></td><td>External location <code>px_lakehouse_exloc_catalog_‹e›</code>, managed storage of catalog <code>px_ucc_phoenix_‹e›</code></td><td>Every table. Schemas audit, metadata, bronze, silver and gold.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Containers <code>bronze</code>, <code>silver</code>, <code>gold</code></td><td>None</td><td>Not used by Unity Catalog. The layers are schemas in the catalog.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Dev: foreign catalog <code>px_fed_phoenix_sqlsrv_d</code> to read. All: service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>Key vault <code>px-lakehouse-‹e›-kv</code></td><td>Secret scope <code>px-lakehouse-keyvault</code></td><td>Secrets of the connections and jobs, such as <code>px-lakehouse-d-sql-sp-client-secret</code>.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>metastore</code> in <code>pxlakehouseucsa02</code></td><td>Metastore root</td><td>Managed data at metastore level. The catalogs keep their own storage.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-data</code>, <code>-data-t</code>, <code>-data-p</code>: one per deploy SP.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="arch-resources">5. Resource list</h2>
+<p>Grouped by the plan that makes them. Section 4 of the build guide gives the order.</p>
+<div class="card table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>Settings</th></tr></thead>
+    <tbody>
+      <tr><th colspan="3">plans/dev, test, prod · resource group <code>px-lakehouse-‹e›-rg</code>, westeurope</th></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-‹e›-dbr</td><td>Databricks workspace</td><td>Premium. VNet injection, no public IP. Customer-managed keys enabled, but no key is set. Databricks makes the managed resource group <code>px-lakehouse-dbr-managed-‹e›-rg</code> with DBFS storage <code>pxlakehouse‹e›dbfs</code>.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-vnet"/></svg>px-lakehouse-‹e›-vnet</td><td>Virtual network</td><td>10.‹n›.0.0/16, three subnets (section 2).</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-nsg"/></svg>px-lakehouse-‹e›-nsg</td><td>Network security group</td><td>On both Databricks subnets. No rules of its own.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-rt"/></svg>px-lakehouse-‹e›-rt</td><td>Route table</td><td>On both Databricks subnets. No routes.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-nat"/></svg>px-lakehouse-‹e›-nat</td><td>NAT gateway</td><td>Outbound traffic of the public subnet, through <code>px-lakehouse-‹e›-public-ip</code> (static, Standard).</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pe"/></svg>px-lakehouse-‹e›-dbr-pe</td><td>Private endpoint</td><td>Workspace back end (databricks_ui_api).</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pe"/></svg>px-lakehouse-‹e›-sqlsrv-pe</td><td>Private endpoint</td><td>SQL server (sqlServer).</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dns"/></svg>privatelink.azuredatabricks.net<br><svg class="ti" aria-hidden="true"><use href="#az-dns"/></svg>privatelink.database.windows.net</td><td>Private DNS zones</td><td>Linked to the VNet.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouse‹e›sa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Containers landing, catalog (<code>prevent_destroy</code>), bronze, silver, gold.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-‹e›-kv</td><td>Key vault</td><td>Standard. Azure RBAC, not access policies. Soft delete 7 days, no purge protection.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sqlsrv"/></svg>px-lakehouse-‹e›-sqlsrv</td><td>SQL server</td><td>germanywestcentral: westeurope refuses new SQL servers on these subscriptions. Entra ID logins only, TLS 1.2, public access off.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>px-lakehouse-‹e›-sqldb</td><td>SQL database</td><td>Serverless GP_S_Gen5_1: 0.5 to 1 vCore, pauses after 60 minutes, 10 GB.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-adf"/></svg>px-lakehouse-‹e›-adf</td><td>Data Factory</td><td>No pipelines and no network settings yet.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>px-lakehouse-‹e›-dbr-adls-connector</td><td>Access connector</td><td>Identity of the storage credential with the same name. Isolated, bound to the workspace.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>px-lakehouse-‹e›-dbr-sqlsrv-connector</td><td>Access connector</td><td>Identity of the service credential with the same name, for writes to SQL. Isolated, bound to the workspace.</td></tr>
+      <tr><th colspan="3">plans/dev, test, prod · in the Databricks account</th></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pl"/></svg>px-lakehouse-‹e›-ncc</td><td>Network connectivity config</td><td>Five private endpoint rules: storage blob, dfs and queue, key vault, SQL server.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>px-lakehouse-‹e›-network-policy</td><td>Network policy</td><td>Ingress: two IP addresses, and the deploy SP by identity. Egress: not restricted.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The admin group gets its metastore grant.</td></tr>
+      <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouseucsa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Container metastore.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>px-lakehouse-uc-dbr-connector</td><td>Access connector</td><td>The metastore's root credential, made through the account API.</td></tr>
+      <tr><th colspan="3">plans/terraform_state · prod subscription, resource group <code>px-lakehouse-tfstate-rg</code></th></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehousetfstatesa</td><td>Storage account</td><td>Entra ID only (no shared keys), TLS 1.2, versioning. Deleted blobs and containers kept 30 days. <code>prevent_destroy</code>. Four containers, one per writer.</td></tr>
+      <tr><th colspan="3">plans/user_management · Entra ID and the Databricks account</th></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg>App registrations</td><td>Entra apps and service principals</td><td>Per environment: deploy SP (with GitHub federated credentials and its state role), run-as SP, SQL SP. Also <code>px-lakehouse-sp</code>, retired.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Entra groups</td><td>Security groups</td><td>Per environment: engineers, readers, support and keyvault-managers. Members are not in the code.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Account groups</td><td>Databricks groups</td><td><code>px-lakehouse-‹e›-admins</code> and <code>px-lakehouse-metastore-admins</code>, with their members.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2 id="arch-gaps">6. Points to know</h2>
+<div class="card">
+  <ul class="plain">
+    <li>The storage accounts and the key vaults accept traffic from any network. Only the Entra ID roles protect them. Shared keys are on for the environment storage accounts, but off for the state account.</li>
+    <li>Traffic out is open: from classic clusters through the NAT gateway, and from serverless (FULL_ACCESS).</li>
+    <li>The route table has no routes.</li>
+    <li>Data Factory has no pipelines and no network settings. The code marks this as to do.</li>
+    <li>The key vaults have no purge protection. A deleted vault is gone after 7 days.</li>
+    <li>Customer-managed keys are enabled on the workspaces, but no key is set.</li>
+    <li>The containers bronze, silver and gold are not used by Unity Catalog.</li>
+    <li>The members of the persona and key vault manager groups are not in the code. Write them down before a tear down.</li>
+  </ul>
+</div>
+
 </div>
 
 </main>
@@ -598,6 +850,267 @@ function renderAll() {
 }
 renderAll();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+</script>
+
+<!-- Icons for the architecture page. The az-* symbols are Microsoft's Azure Architecture Icons (V23), made for
+     architecture diagrams; the x-* symbols are drawn here for what the set has no icon for. -->
+<svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+<defs>
+<symbol id="x-shield" viewBox="0 0 18 18"><path d="M9 1.2l6.6 2.4v4.9c0 4-2.8 7.1-6.6 8.3-3.8-1.2-6.6-4.3-6.6-8.3V3.6z" fill="#ff3621"/><path d="M5.8 9l2.2 2.2 4.3-4.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="x-globe" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.4" fill="none" stroke="currentColor" stroke-width="1.3"/><ellipse cx="9" cy="9" rx="3.2" ry="7.4" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M1.8 6.5h14.4M1.8 11.5h14.4" stroke="currentColor" stroke-width="1.1"/></symbol>
+<symbol id="x-ci" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 5.5v7l5.5-3.5z" fill="currentColor"/></symbol>
+<symbol id="az-rg" viewBox="0 0 18 18"><g><g><path d="M.5,15.08a.16.16,0,0,0,.08.14l1.16.65L3.7,17a.17.17,0,0,0,.23-.06l.66-1.12a.16.16,0,0,0-.06-.21l-2.3-1.3a.17.17,0,0,1-.08-.14V3.85a.16.16,0,0,1,.08-.14l2.3-1.3a.16.16,0,0,0,.06-.21L3.93,1.08A.17.17,0,0,0,3.7,1L1.78,2.11l-1.2.67a.16.16,0,0,0-.08.14V15.08Z" fill="#949494" /><path d="M2.14,3.77l.06-.06,2.3-1.3a.14.14,0,0,0,.06-.21L3.9,1.08A.15.15,0,0,0,3.68,1L1.75,2.11.56,2.78s-.05,0-.06.06l.9.51Z" fill="#a3a3a3" /><path d="M4.5,15.59l-2.3-1.3a.22.22,0,0,1-.07-.09l-1.62,1,.05,0,1.15.65,2,1.11a.15.15,0,0,0,.22-.06l.66-1.12A.14.14,0,0,0,4.5,15.59Z" fill="#a3a3a3" /></g><path d="M17.5,15.08a.16.16,0,0,1-.08.14l-1.16.65L14.3,17a.17.17,0,0,1-.23-.06l-.66-1.12a.16.16,0,0,1,.06-.21l2.3-1.3a.17.17,0,0,0,.08-.14V3.85a.16.16,0,0,0-.08-.14l-2.3-1.3a.16.16,0,0,1-.06-.21l.66-1.12A.17.17,0,0,1,14.3,1l1.92,1.09,1.2.67a.16.16,0,0,1,.08.14V15.08Z" fill="#949494" /><path d="M15.86,3.77l-.06-.06-2.3-1.3a.14.14,0,0,1-.06-.21l.66-1.12A.15.15,0,0,1,14.32,1l1.93,1.09,1.19.67s0,0,.06.06l-.9.51Z" fill="#a3a3a3" /><path d="M13.5,15.59l2.3-1.3a.22.22,0,0,0,.07-.09l1.62,1,0,0-1.15.65-2,1.11a.15.15,0,0,1-.22-.06l-.66-1.12A.14.14,0,0,1,13.5,15.59Z" fill="#a3a3a3" /><polygon points="14.31 5.93 14.31 12.07 8.99 15.16 8.99 9.01 14.31 5.93" fill="#32bedd" /><polygon points="14.31 5.93 9 9.02 3.68 5.93 9 2.84 14.31 5.93" fill="#9cebff" /><polygon points="8.99 9.02 8.99 15.16 3.68 12.07 3.68 5.93 8.99 9.02" fill="#50e6ff" /><polygon points="3.68 12.07 8.99 9.01 8.99 15.16 3.68 12.07" fill="#9cebff" /><polygon points="14.31 12.07 8.99 9.01 8.99 15.16 14.31 12.07" fill="#50e6ff" /></g></symbol>
+<symbol id="az-sub" viewBox="0 0 18 18"><defs><radialGradient id="az-sub-0" cx="-36.63" cy="17.12" r="11.18" gradientTransform="translate(41.88 -7.4) scale(0.94 0.94)" gradientUnits="userSpaceOnUse"><stop offset="0.27" stop-color="#ffd70f" /><stop offset="0.49" stop-color="#ffcb12" /><stop offset="0.88" stop-color="#feac19" /><stop offset="1" stop-color="#fea11b" /></radialGradient></defs><path id="az-sub-1" d="M13.56,7.19a2.07,2.07,0,0,0,0-2.93h0L10,.69a2.06,2.06,0,0,0-2.92,0h0L3.52,4.26a2.09,2.09,0,0,0,0,2.93l3,3a.61.61,0,0,1,.17.41v5.52a.7.7,0,0,0,.2.5l1.35,1.35a.45.45,0,0,0,.66,0l1.31-1.31h0l.77-.77a.26.26,0,0,0,0-.38l-.55-.56a.29.29,0,0,1,0-.42l.55-.56a.26.26,0,0,0,0-.38L10.4,13a.28.28,0,0,1,0-.41L11,12a.26.26,0,0,0,0-.38l-.77-.78v-.28Zm-5-5.64A1.18,1.18,0,1,1,7.37,2.73,1.17,1.17,0,0,1,8.54,1.55Z" fill="url(#az-sub-0)" /><path id="az-sub-2" d="M7.62,16.21h0A.25.25,0,0,0,8,16V11.55a.27.27,0,0,0-.11-.22h0a.25.25,0,0,0-.39.22V16A.27.27,0,0,0,7.62,16.21Z" fill="#ff9300" opacity="0.75" /><rect id="az-sub-3" x="5.69" y="5.45" width="5.86" height="0.69" rx="0.32" fill="#ff9300" opacity="0.75" /><rect id="az-sub-4" x="5.69" y="6.57" width="5.86" height="0.69" rx="0.32" fill="#ff9300" opacity="0.75" /></symbol>
+<symbol id="az-dbr" viewBox="0 0 18 18"><path d="M1.155,4.93v.512L9,9.868l7.006-3.957,0,1.6L9,11.491,1.55,7.258l-.395.22V10.54L9,14.955l7.006-3.942,0,1.586L9,16.581,1.55,12.347l-.395.22v.519L9,17.5l7.845-4.414V10.021l-.4-.218L9,14.036,1.992,10.054V8.476L9,12.414,16.845,8V4.978l-.4-.219L9,8.993,2.352,5.215,9,1.46l5.476,3.094.479-.269V3.863L9,.5Z" fill="#ff3621" /></symbol>
+<symbol id="az-vnet" viewBox="0 0 18 18"><defs><linearGradient id="az-vnet-0" x1="9.88" y1="8.59" x2="11.52" y2="10.23" gradientTransform="translate(2.03 -0.4) rotate(-0.08)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#86d633" /><stop offset="1" stop-color="#5e9624" /></linearGradient><linearGradient id="az-vnet-1" x1="6.18" y1="8.59" x2="7.81" y2="10.23" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#86d633" /><stop offset="1" stop-color="#5e9624" /></linearGradient><linearGradient id="az-vnet-2" x1="2.48" y1="8.59" x2="4.11" y2="10.23" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#86d633" /><stop offset="1" stop-color="#5e9624" /></linearGradient></defs><circle cx="12.74" cy="8.99" r="1.16" fill="url(#az-vnet-0)" /><circle cx="9.04" cy="9" r="1.16" fill="url(#az-vnet-1)" /><circle cx="5.34" cy="9" r="1.16" fill="url(#az-vnet-2)" /><path d="M2.61,7.28h.94a.3.3,0,0,1,.3.3v6.94a.6.6,0,0,1-.6.6H2.31a0,0,0,0,1,0,0V7.58a.3.3,0,0,1,.3-.3Z" transform="translate(13.18 16.93) rotate(134.92)" fill="#50e6ff" /><path d="M2.56,2.91H3.5a.3.3,0,0,1,.3.3v7.43a0,0,0,0,1,0,0H2.86a.6.6,0,0,1-.6-.6V3.21a.3.3,0,0,1,.3-.3Z" transform="translate(5.66 -0.16) rotate(44.92)" fill="#1490df" /><path d="M14.15,7.28h.94a.6.6,0,0,1,.6.6v6.94a.3.3,0,0,1-.3.3h-.94a.3.3,0,0,1-.3-.3V7.28a0,0,0,0,1,0,0Z" transform="translate(12.32 -7.28) rotate(45.08)" fill="#50e6ff" /><path d="M14.81,2.91h.94a0,0,0,0,1,0,0v7.43a.3.3,0,0,1-.3.3H14.5a.3.3,0,0,1-.3-.3V3.51a.6.6,0,0,1,.6-.6Z" transform="translate(30.36 0.99) rotate(135.08)" fill="#1490df" /></symbol>
+<symbol id="az-nsg" viewBox="0 0 18 18"><defs><linearGradient id="az-nsg-0" x1="9.01" y1="0.75" x2="9.01" y2="17.25" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5ea0ef" /><stop offset="0.18" stop-color="#559cec" /><stop offset="0.47" stop-color="#3c91e5" /><stop offset="0.84" stop-color="#1380da" /><stop offset="1" stop-color="#0078d4" /></linearGradient></defs><path d="M16.36,8.4c0,4.84-5.85,8.74-7.12,9.53a.46.46,0,0,1-.48,0c-1.27-.79-7.12-4.69-7.12-9.53V2.58a.46.46,0,0,1,.45-.46C6.64,2,5.59,0,9,0s2.36,2,6.91,2.12a.46.46,0,0,1,.45.46Z" fill="#0078d4" /><path d="M15.75,8.45c0,4.44-5.36,8-6.53,8.74a.43.43,0,0,1-.44,0c-1.17-.72-6.53-4.3-6.53-8.74V3.11a.42.42,0,0,1,.41-.42C6.83,2.58,5.87.75,9,.75s2.17,1.83,6.34,1.94a.42.42,0,0,1,.41.42Z" fill="#6bb9f2" /><path d="M9,9V.75c3.13,0,2.17,1.83,6.34,1.94a.43.43,0,0,1,.41.43V8.46a4.89,4.89,0,0,1,0,.54ZM9,9H2.28c.4,4.18,5.38,7.5,6.5,8.19a.39.39,0,0,0,.18.06H9Z" fill="url(#az-nsg-0)" /><path d="M2.66,2.69C6.83,2.58,5.87.75,9,.75V9H2.28a4.89,4.89,0,0,1,0-.54V3.12A.43.43,0,0,1,2.66,2.69Z" fill="#50e6ff" /><path d="M15.72,9H9v8.25H9a.39.39,0,0,0,.18-.06C10.34,16.5,15.32,13.18,15.72,9Z" fill="#50e6ff" /></symbol>
+<symbol id="az-nat" viewBox="0 0 18 18"><defs><linearGradient id="az-nat-0" x1="9" y1="18.17" x2="9" y2="1.506" gradientTransform="translate(9 -3.728) rotate(45)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#238ab0" /><stop offset="0.109" stop-color="#2da4c8" /><stop offset="0.775" stop-color="#3ed3f2" /></linearGradient></defs><g><rect x="2.553" y="2.553" width="12.893" height="12.893" rx="0.591" transform="translate(-3.728 9) rotate(-45)" fill="url(#az-nat-0)" /><polygon points="14.092 10.067 13.734 9.709 13.734 8.33 10.877 8.33 10.877 9.85 12.158 9.85 8.94 13.069 5.721 9.85 7.023 9.85 7.023 8.33 3.885 8.33 3.885 9.85 4.004 9.85 3.788 10.067 8.286 14.565 8.94 13.912 9.593 14.565 14.092 10.067" fill="#9cebff" /><g><ellipse id="az-nat-1" cx="3.977" cy="9.09" rx="1.577" ry="1.585" transform="translate(-5.271 5.494) rotate(-45.121)" fill="#fff" /><ellipse id="az-nat-2" cx="3.977" cy="9.09" rx="0.896" ry="0.905" transform="translate(-5.267 5.484) rotate(-45.061)" fill="#86d633" /><ellipse id="az-nat-3" cx="14.014" cy="9.09" rx="1.577" ry="1.585" transform="translate(-2.316 12.607) rotate(-45.121)" fill="#fff" /><ellipse id="az-nat-4" cx="14.014" cy="9.09" rx="0.896" ry="0.905" transform="translate(-2.319 12.59) rotate(-45.061)" fill="#86d633" /></g><g><path d="M11.04,4.806l-2-2a.15.15,0,0,0-.213,0l-2,2a.15.15,0,0,0,.106.257H8.068a.107.107,0,0,1,.107.107V15.433H9.7V5.17A.107.107,0,0,1,9.8,5.063h1.131A.15.15,0,0,0,11.04,4.806Z" fill="#fff" /><ellipse id="az-nat-5" cx="8.935" cy="14.139" rx="1.577" ry="1.585" transform="translate(-7.388 10.494) rotate(-45.121)" fill="#fff" /><ellipse id="az-nat-6" cx="8.935" cy="14.139" rx="0.896" ry="0.905" transform="translate(-7.384 10.477) rotate(-45.061)" fill="#86d633" /></g></g></symbol>
+<symbol id="az-pip" viewBox="0 0 18 18"><defs><linearGradient id="az-pip-0" x1="9" y1="15.83" x2="9" y2="5.79" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#32bedd" /><stop offset="0.18" stop-color="#32caea" /><stop offset="0.41" stop-color="#32d2f2" /><stop offset="0.78" stop-color="#32d4f5" /></linearGradient></defs><path d="M.5,5.79h17a0,0,0,0,1,0,0v9.48a.57.57,0,0,1-.57.57H1.07a.57.57,0,0,1-.57-.57V5.79A0,0,0,0,1,.5,5.79Z" fill="url(#az-pip-0)" /><path d="M1.07,2.17H16.93a.57.57,0,0,1,.57.57V5.79a0,0,0,0,1,0,0H.5a0,0,0,0,1,0,0V2.73A.57.57,0,0,1,1.07,2.17Z" fill="#767676" /><circle cx="12.82" cy="10.19" r="1.38" fill="#f2f2f2" /><circle cx="9.06" cy="10.19" r="1.38" fill="#f2f2f2" /><circle cx="5.18" cy="10.19" r="1.38" fill="#f2f2f2" /><rect x="2.79" y="3.25" width="12.43" height="1.46" rx="0.28" fill="#f2f2f2" /></symbol>
+<symbol id="az-rt" viewBox="0 0 18 18"><defs><linearGradient id="az-rt-0" x1="10.56" y1="7.77" x2="10.56" y2="19.24" gradientUnits="userSpaceOnUse"><stop offset="0.22" stop-color="#32d4f5" /><stop offset="1" stop-color="#198ab3" /></linearGradient><linearGradient id="az-rt-1" x1="10.23" y1="1.63" x2="11.07" y2="12.04" gradientUnits="userSpaceOnUse"><stop offset="0.22" stop-color="#32d4f5" /><stop offset="1" stop-color="#198ab3" /></linearGradient></defs><path d="M16.23,17.17A1.21,1.21,0,0,0,17.46,16V15.8c-.49-3.86-2.69-7-6.89-7s-6.48,2.66-6.91,7a1.24,1.24,0,0,0,1.1,1.36H16.23Z" fill="url(#az-rt-0)" /><path d="M10.57,9.71a3.86,3.86,0,0,1-2.1-.61l2.08,5.42,2.06-5.39A3.83,3.83,0,0,1,10.57,9.71Z" fill="#fff" opacity="0.8" /><circle cx="10.57" cy="5.84" r="3.87" fill="url(#az-rt-1)" /><path d="M6,5.88V1A.16.16,0,0,0,5.84.83H4.57A.17.17,0,0,0,4.39,1V5.71a.18.18,0,0,1-.17.17H3.1A.12.12,0,0,1,3,5.76V4.45a.11.11,0,0,0-.19-.08L.59,6.57a.16.16,0,0,0,0,.24L2.79,9A.11.11,0,0,0,3,8.93V7.61A.11.11,0,0,1,3.1,7.5H5.84A.17.17,0,0,0,6,7.33V5.88Z" fill="#0078d4" /></symbol>
+<symbol id="az-pe" viewBox="0 0 18 18"><defs><linearGradient id="az-pe-0" x1="9.084" y1="790.967" x2="9.084" y2="787.492" gradientTransform="matrix(1, 0, 0, -1, 0, 791.516)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#50e6ff" /><stop offset="1" stop-color="#32bedd" /></linearGradient><linearGradient id="az-pe-1" x1="9.065" y1="13.843" x2="9.065" y2="10.368" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5e9624" /><stop offset="0.183" stop-color="#629c25" /><stop offset="0.435" stop-color="#6dae2a" /><stop offset="0.726" stop-color="#7fcb30" /><stop offset="0.822" stop-color="#86d633" /></linearGradient></defs><g id="az-pe-2"><g><path d="M7.85,13.342a1.738,1.738,0,1,0,2.436-2.479,1.715,1.715,0,0,0-.626-.389V3.009H8.548v7.444a1.729,1.729,0,0,0-.7,2.891Z" fill="#b3b3b3" /><circle cx="9.084" cy="2.209" r="1.738" fill="url(#az-pe-0)" /><g><path d="M2.632,10.449h.937a.3.3,0,0,1,.3.3v6.909a.6.6,0,0,1-.6.6H2.332a0,0,0,0,1,0,0V10.749A.3.3,0,0,1,2.632,10.449Z" transform="translate(15.452 22.292) rotate(134.919)" fill="#50e6ff" /><path d="M2.581,6.093h.937a.3.3,0,0,1,.3.3v7.4a0,0,0,0,1,0,0H2.88a.6.6,0,0,1-.6-.6v-6.8A.3.3,0,0,1,2.581,6.093Z" transform="translate(7.91 0.749) rotate(44.919)" fill="#1490df" /><path d="M14.132,10.449h.937a.6.6,0,0,1,.6.6v6.909a.3.3,0,0,1-.3.3h-.937a.3.3,0,0,1-.3-.3V10.449a0,0,0,0,1,0,0Z" transform="translate(14.542 -6.333) rotate(45.081)" fill="#50e6ff" /><path d="M14.782,6.093h.937a0,0,0,0,1,0,0v7.4a.3.3,0,0,1-.3.3h-.937a.3.3,0,0,1-.3-.3v-6.8A.6.6,0,0,1,14.782,6.093Z" transform="translate(32.558 6.424) rotate(135.081)" fill="#1490df" /></g><circle cx="9.065" cy="12.106" r="1.738" fill="url(#az-pe-1)" /></g></g></symbol>
+<symbol id="az-pl" viewBox="0 0 18 18"><defs><linearGradient id="az-pl-0" x1="7.699" y1="259.22" x2="7.699" y2="263.711" gradientTransform="translate(0 -250)" gradientUnits="userSpaceOnUse"><stop offset="0.23" stop-color="#5ea0ef" /><stop offset="0.32" stop-color="#5b9fee" /><stop offset="0.48" stop-color="#509aeb" /><stop offset="0.57" stop-color="#3f92e6" /><stop offset="0.75" stop-color="#2688df" /><stop offset="0.93" stop-color="#127fd9" /></linearGradient><linearGradient id="az-pl-1" x1="9.927" y1="261.091" x2="9.927" y2="265.582" gradientTransform="translate(0 -250)" gradientUnits="userSpaceOnUse"><stop offset="0.02" stop-color="#5ea0ef" /><stop offset="0.14" stop-color="#5b9fee" /><stop offset="0.23" stop-color="#5b9fee" /><stop offset="0.34" stop-color="#509aeb" /><stop offset="0.44" stop-color="#3f92e6" /><stop offset="0.63" stop-color="#2688df" /><stop offset="0.93" stop-color="#127fd9" /></linearGradient></defs><path d="M8.252,2.521H9.374V9.594H8.252Z" fill="#7a7a7a" /><path d="M10.459,2.3A1.647,1.647,0,1,1,8.813.65h0A1.646,1.646,0,0,1,10.459,2.3Z" fill="#1490df" /><path d="M8.588,9.22h-1.8a2.246,2.246,0,0,0-.348,4.461,2.415,2.415,0,0,1,.022-.835,1.418,1.418,0,0,1,.326-2.8h1.8a1.422,1.422,0,0,1,0,2.844H8.094a1.078,1.078,0,0,0-.1.45,1.022,1.022,0,0,0,.071.374h.527a2.246,2.246,0,1,0,0-4.491Z" fill="url(#az-pl-0)" /><path d="M11.182,11.121a2.642,2.642,0,0,1,.026.344,2.317,2.317,0,0,1-.049.491,1.418,1.418,0,0,1-.325,2.8h-1.8a1.423,1.423,0,0,1,0-2.845h.494a1.042,1.042,0,0,0,.1-.449,1.018,1.018,0,0,0-.071-.374H9.037a2.246,2.246,0,0,0,0,4.491h1.8a2.246,2.246,0,0,0,.348-4.461Z" fill="url(#az-pl-1)" /><path d="M5.58,16.525l-.412.415a.28.28,0,0,1-.4,0l-4.607-4.6a.566.566,0,0,1,0-.8l.416-.412,5,4.992a.276.276,0,0,1,0,.391h0Z" fill="#50e6ff" /><path d="M5.082,7.02l.46.46a.282.282,0,0,1,0,.4L.625,12.809l-.461-.457a.566.566,0,0,1,0-.8L4.685,7.02A.28.28,0,0,1,5.082,7.02Z" fill="#1490df" /><path d="M12.417,16.851a.278.278,0,0,1-.006-.392h0l.006,0,5-4.989.416.416a.566.566,0,0,1,0,.8l-4.611,4.588a.277.277,0,0,1-.391.006h0l-.006-.005Z" fill="#50e6ff" /><path d="M13.311,7.349l4.525,4.536a.563.563,0,0,1,0,.793l-.461.46L12.454,8.206a.289.289,0,0,1,0-.4l.46-.456A.282.282,0,0,1,13.311,7.349Z" fill="#1490df" /></symbol>
+<symbol id="az-dns" viewBox="0 0 18 18"><defs><radialGradient id="az-dns-0" cx="-6811.4" cy="6729.69" r="17" gradientTransform="matrix(0.5, 0, 0, -0.5, 3414.91, 3374.05)" gradientUnits="userSpaceOnUse"><stop offset="0.18" stop-color="#5ea0ef" /><stop offset="1" stop-color="#0078d4" /></radialGradient></defs><path id="az-dns-1" d="M14.21,15.72A8.5,8.5,0,0,1,3.79,2.28l.09-.06a8.5,8.5,0,0,1,10.33,13.5" fill="url(#az-dns-0)" /><path d="M9,1.31A7.69,7.69,0,1,0,16.69,9,7.7,7.7,0,0,0,9,1.31ZM14.15,3.9A7.37,7.37,0,0,1,12,4.7,8.83,8.83,0,0,0,10.75,2,7.2,7.2,0,0,1,14.15,3.9ZM9,1.74a6.59,6.59,0,0,1,1.09.09h0a7.48,7.48,0,0,1,1.53,3,15.12,15.12,0,0,1-5.45,0A7.38,7.38,0,0,1,7.68,1.89l0,0A7.34,7.34,0,0,1,9,1.74ZM7,2A8.72,8.72,0,0,0,5.73,4.68a5.58,5.58,0,0,1-1.9-.77A7.35,7.35,0,0,1,7,2ZM3.72,14a5.27,5.27,0,0,1,1.78-.76,7.08,7.08,0,0,0,1.35,2.72A7.25,7.25,0,0,1,3.72,14Zm6.41,2.2A7.08,7.08,0,0,1,9,16.26a6.83,6.83,0,0,1-1.44-.15l0,0a6,6,0,0,1-1.67-3,14.73,14.73,0,0,1,5.88,0,6,6,0,0,1-1.69,3Zm.73-.16a7.13,7.13,0,0,0,1.38-2.8,6.68,6.68,0,0,1,2,.83A7.13,7.13,0,0,1,10.86,16Zm1.48-3.22c.08-.36.15-.73.2-1.12l-.46.11c-.05.31-.1.62-.17.91a15.23,15.23,0,0,0-6.09,0c-.07-.27-.12-.56-.17-.86a.28.28,0,0,1,0-.09l-.46-.13a2.36,2.36,0,0,0,0,.28c0,.32.11.62.17.91a5.9,5.9,0,0,0-2,.85,7.24,7.24,0,0,1,.11-9.4,6.29,6.29,0,0,0,2.08.86c-.07.24-.13.5-.18.76s0,.25-.08.37l.47-.11,0-.17c.06-.26.12-.51.19-.75A14.89,14.89,0,0,0,9,5.48a15,15,0,0,0,2.78-.26c.07.27.14.56.2.85l.46.11q-.11-.54-.24-1a7.73,7.73,0,0,0,2.3-.91,7.22,7.22,0,0,1,.06,9.49A7.28,7.28,0,0,0,12.34,12.79Z" fill="#5ea0ef" /><path d="M3.69,7a7.92,7.92,0,0,1,1.16-.08,2.44,2.44,0,0,1,1.71.52A2,2,0,0,1,7.15,8.9a2.21,2.21,0,0,1-.61,1.64,2.6,2.6,0,0,1-1.86.61,9.17,9.17,0,0,1-1-.05Zm.55,3.73a4,4,0,0,0,.55,0A1.62,1.62,0,0,0,6.58,8.92,1.5,1.5,0,0,0,4.87,7.3a3.17,3.17,0,0,0-.63,0Z" fill="#fff" /><path d="M7.86,11.11V6.9h.59L9.8,9a12.18,12.18,0,0,1,.76,1.37h0c-.05-.56-.06-1.07-.06-1.73V6.9H11v4.21h-.55L9.13,9c-.29-.47-.57-1-.79-1.4h0c0,.53,0,1,0,1.74v1.8Z" fill="#fff" /><path d="M11.89,10.45a2,2,0,0,0,1,.27c.56,0,.88-.29.88-.72s-.22-.62-.79-.83-1.12-.6-1.12-1.2a1.22,1.22,0,0,1,1.37-1.14,2,2,0,0,1,.93.2L14,7.48a1.63,1.63,0,0,0-.8-.2c-.58,0-.8.34-.8.63s.26.59.84.81,1.08.62,1.08,1.24-.48,1.21-1.48,1.21a2.16,2.16,0,0,1-1.07-.27Z" fill="#fff" /></symbol>
+<symbol id="az-sqlsrv" viewBox="0 0 18 18"><defs><linearGradient id="az-sqlsrv-0" x1="0.5" y1="10.04" x2="13.18" y2="10.04" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#005ba1" /><stop offset="0.07" stop-color="#0060a9" /><stop offset="0.36" stop-color="#0071c8" /><stop offset="0.52" stop-color="#0078d4" /><stop offset="0.64" stop-color="#0074cd" /><stop offset="0.82" stop-color="#006abb" /><stop offset="1" stop-color="#005ba1" /></linearGradient></defs><path d="M6.84,5.09c-3.5,0-6.34-1-6.34-2.3V15c0,1.26,2.79,2.28,6.25,2.3h.09c3.5,0,6.34-1,6.34-2.3V2.79C13.18,4.06,10.34,5.09,6.84,5.09Z" fill="url(#az-sqlsrv-0)" /><path d="M13.18,2.79c0,1.27-2.84,2.3-6.34,2.3S.5,4.06.5,2.79,3.34.49,6.84.49s6.34,1,6.34,2.3" fill="#e8e8e8" /><path d="M11.7,2.6c0,.81-2.18,1.46-4.86,1.46S2,3.41,2,2.6,4.16,1.14,6.84,1.14,11.7,1.8,11.7,2.6" fill="#50e6ff" /><path d="M6.84,2.94A12,12,0,0,0,3,3.49a11.25,11.25,0,0,0,3.85.57,11.25,11.25,0,0,0,3.85-.57A12,12,0,0,0,6.84,2.94Z" fill="#198ab3" /><path d="M10.74,11.1V7.72H9.81v4.14h2.46V11.1ZM3.59,9.43a1.92,1.92,0,0,1-.51-.31A.44.44,0,0,1,3,8.8a.38.38,0,0,1,.16-.31.72.72,0,0,1,.42-.11,1.67,1.67,0,0,1,1,.29V7.81a2.67,2.67,0,0,0-1-.16A1.74,1.74,0,0,0,2.38,8a1.13,1.13,0,0,0-.41.9c0,.51.32.91,1,1.21a2.9,2.9,0,0,1,.61.36.4.4,0,0,1,.16.32.38.38,0,0,1-.16.31.75.75,0,0,1-.45.12A1.6,1.6,0,0,1,2,10.77v.93a2.29,2.29,0,0,0,1.07.23,2,2,0,0,0,1.18-.32,1.1,1.1,0,0,0,.43-.92,1,1,0,0,0-.25-.7A2.42,2.42,0,0,0,3.59,9.43ZM8.79,11a2.4,2.4,0,0,0,.33-1.27,2.32,2.32,0,0,0-.25-1.1,1.81,1.81,0,0,0-.7-.75,2,2,0,0,0-1-.26,2.18,2.18,0,0,0-1.09.27,1.87,1.87,0,0,0-.73.77,2.41,2.41,0,0,0-.26,1.15,2.26,2.26,0,0,0,.24,1.05,1.83,1.83,0,0,0,.68.75,2,2,0,0,0,1,.29l.85,1H9.05l-1.2-1.11A1.81,1.81,0,0,0,8.79,11Zm-.93-.26a1,1,0,0,1-1.53,0,1.51,1.51,0,0,1-.28-1,1.48,1.48,0,0,1,.29-1,.92.92,0,0,1,.78-.37.89.89,0,0,1,.75.37,1.62,1.62,0,0,1,.27,1A1.46,1.46,0,0,1,7.86,10.77Z" fill="#f2f2f2" /><path d="M14.81,17.49l.24-.79.47-.27.81.36.52-.53V16.2l-.37-.71.22-.5.81-.29.09,0v-.73l-.1,0-.8-.24-.26-.46.35-.82-.53-.51H16.2l-.71.36L15,12l-.32-.89h-.74l0,.11-.24.79-.51.22-.87-.4-.51.53.05.1.38.74-.2.51L11.1,14v.74l.11,0,.79.24.22.51-.39.86.53.52.09-.05.74-.38.51.2.34.89h.73Zm-1.2-2.36a1.06,1.06,0,1,1,1.49-1.52,1.06,1.06,0,0,1-1.49,1.52Z" fill="#949494" /></symbol>
+<symbol id="az-sqldb" viewBox="0 0 18 18"><defs><linearGradient id="az-sqldb-0" x1="2.59" y1="10.16" x2="15.41" y2="10.16" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#005ba1" /><stop offset="0.07" stop-color="#0060a9" /><stop offset="0.36" stop-color="#0071c8" /><stop offset="0.52" stop-color="#0078d4" /><stop offset="0.64" stop-color="#0074cd" /><stop offset="0.82" stop-color="#006abb" /><stop offset="1" stop-color="#005ba1" /></linearGradient><radialGradient id="az-sqldb-1" cx="9.36" cy="10.57" r="7.07" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f2f2f2" /><stop offset="0.58" stop-color="#eee" /><stop offset="1" stop-color="#e6e6e6" /></radialGradient></defs><path d="M9,5.14c-3.54,0-6.41-1-6.41-2.32V15.18c0,1.27,2.82,2.3,6.32,2.32H9c3.54,0,6.41-1,6.41-2.32V2.82C15.41,4.11,12.54,5.14,9,5.14Z" fill="url(#az-sqldb-0)" /><path d="M15.41,2.82c0,1.29-2.87,2.32-6.41,2.32s-6.41-1-6.41-2.32S5.46.5,9,.5s6.41,1,6.41,2.32" fill="#e8e8e8" /><path d="M13.92,2.63c0,.82-2.21,1.48-4.92,1.48S4.08,3.45,4.08,2.63,6.29,1.16,9,1.16s4.92.66,4.92,1.47" fill="#50e6ff" /><path d="M9,3a11.55,11.55,0,0,0-3.89.57A11.42,11.42,0,0,0,9,4.11a11.15,11.15,0,0,0,3.89-.58A11.84,11.84,0,0,0,9,3Z" fill="#198ab3" /><path d="M12.9,11.4V8H12v4.13h2.46V11.4ZM5.76,9.73a1.83,1.83,0,0,1-.51-.31.44.44,0,0,1-.12-.32.34.34,0,0,1,.15-.3.68.68,0,0,1,.42-.12,1.62,1.62,0,0,1,1,.29V8.11a2.58,2.58,0,0,0-1-.16,1.64,1.64,0,0,0-1.09.34,1.08,1.08,0,0,0-.42.89c0,.51.32.91,1,1.21a2.88,2.88,0,0,1,.62.36.42.42,0,0,1,.15.32.38.38,0,0,1-.16.31.81.81,0,0,1-.45.11,1.66,1.66,0,0,1-1.09-.42V12a2.17,2.17,0,0,0,1.07.24,1.88,1.88,0,0,0,1.18-.33A1.08,1.08,0,0,0,6.84,11a1.05,1.05,0,0,0-.25-.7A2.42,2.42,0,0,0,5.76,9.73ZM11,11.32a2.34,2.34,0,0,0,.33-1.26A2.32,2.32,0,0,0,11,9a1.81,1.81,0,0,0-.7-.75,2,2,0,0,0-1-.26,2.11,2.11,0,0,0-1.08.27A1.86,1.86,0,0,0,7.49,9a2.46,2.46,0,0,0-.26,1.14,2.26,2.26,0,0,0,.24,1,1.76,1.76,0,0,0,.69.74,2.06,2.06,0,0,0,1,.3l.86,1h1.21L10,12.08A1.79,1.79,0,0,0,11,11.32ZM10,11.07a.94.94,0,0,1-.76.35.92.92,0,0,1-.76-.36,1.52,1.52,0,0,1-.29-1,1.53,1.53,0,0,1,.29-1,1,1,0,0,1,.78-.37.87.87,0,0,1,.75.37,1.62,1.62,0,0,1,.27,1A1.46,1.46,0,0,1,10,11.07Z" fill="url(#az-sqldb-1)" /></symbol>
+<symbol id="az-adf" viewBox="0 0 18 18"><defs><linearGradient id="az-adf-0" x1="0.5" y1="9.77" x2="9" y2="9.77" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#005ba1" /><stop offset="0.07" stop-color="#0060a9" /><stop offset="0.36" stop-color="#0071c8" /><stop offset="0.52" stop-color="#0078d4" /><stop offset="0.64" stop-color="#0074cd" /><stop offset="0.81" stop-color="#006abb" /><stop offset="0.99" stop-color="#005ba1" /></linearGradient></defs><g><path d="M13.25,10.48V6.57a.14.14,0,0,0-.24-.1l-4,4L4.85,14.63V17.5H16.93a.56.56,0,0,0,.57-.57V6.57a.14.14,0,0,0-.24-.1Z" fill="#005ba1" /><path d="M4.75,3.58C2.4,3.58.5,2.89.5,2V7.67h0v9.26a.56.56,0,0,0,.57.57H9V2C9,2.89,7.1,3.58,4.75,3.58Z" fill="url(#az-adf-0)" /><rect x="12.91" y="12.97" width="2.27" height="2.27" rx="0.28" fill="#fff" /><rect x="8.97" y="12.97" width="2.27" height="2.27" rx="0.28" fill="#fff" /><rect x="5.03" y="12.97" width="2.27" height="2.27" rx="0.28" fill="#fff" /><path d="M9,2c0,.85-1.9,1.54-4.25,1.54S.5,2.89.5,2,2.4.5,4.75.5,9,1.19,9,2" fill="#eaeaea" /><path d="M8,1.91c0,.55-1.46,1-3.26,1s-3.26-.43-3.26-1S3,.94,4.75.94,8,1.37,8,1.91" fill="#50e6ff" /><path d="M4.75,2.14a8.07,8.07,0,0,0-2.58.37,7.64,7.64,0,0,0,2.58.38,7.64,7.64,0,0,0,2.58-.38A8.07,8.07,0,0,0,4.75,2.14Z" fill="#198ab3" /></g></symbol>
+<symbol id="az-sa" viewBox="0 0 18 18"><defs><linearGradient id="az-sa-0" x1="9" y1="15.83" x2="9" y2="5.79" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#b3b3b3" /><stop offset="0.26" stop-color="#c1c1c1" /><stop offset="1" stop-color="#e6e6e6" /></linearGradient></defs><path d="M.5,5.79h17a0,0,0,0,1,0,0v9.48a.57.57,0,0,1-.57.57H1.07a.57.57,0,0,1-.57-.57V5.79A0,0,0,0,1,.5,5.79Z" fill="url(#az-sa-0)" /><path d="M1.07,2.17H16.93a.57.57,0,0,1,.57.57V5.79a0,0,0,0,1,0,0H.5a0,0,0,0,1,0,0V2.73A.57.57,0,0,1,1.07,2.17Z" fill="#37c2b1" /><path d="M2.81,6.89H15.18a.27.27,0,0,1,.26.27v1.4a.27.27,0,0,1-.26.27H2.81a.27.27,0,0,1-.26-.27V7.16A.27.27,0,0,1,2.81,6.89Z" fill="#fff" /><path d="M2.82,9.68H15.19a.27.27,0,0,1,.26.27v1.41a.27.27,0,0,1-.26.27H2.82a.27.27,0,0,1-.26-.27V10A.27.27,0,0,1,2.82,9.68Z" fill="#37c2b1" /><path d="M2.82,12.5H15.19a.27.27,0,0,1,.26.27v1.41a.27.27,0,0,1-.26.27H2.82a.27.27,0,0,1-.26-.27V12.77A.27.27,0,0,1,2.82,12.5Z" fill="#258277" /></symbol>
+<symbol id="az-kv" viewBox="0 0 18 18"><defs><radialGradient id="az-kv-0" cx="9" cy="9" r="8.5" gradientUnits="userSpaceOnUse"><stop offset="0.18" stop-color="#5ea0ef" /><stop offset="0.56" stop-color="#5c9fee" /><stop offset="0.69" stop-color="#559ced" /><stop offset="0.78" stop-color="#4a97e9" /><stop offset="0.86" stop-color="#3990e4" /><stop offset="0.93" stop-color="#2387de" /><stop offset="0.99" stop-color="#087bd6" /><stop offset="1" stop-color="#0078d4" /></radialGradient><radialGradient id="az-kv-1" cx="38.95" cy="182.07" r="9.88" gradientTransform="translate(-28.71 -163.24) scale(0.94 0.94)" gradientUnits="userSpaceOnUse"><stop offset="0.27" stop-color="#ffd70f" /><stop offset="0.49" stop-color="#ffcb12" /><stop offset="0.88" stop-color="#feac19" /><stop offset="1" stop-color="#fea11b" /></radialGradient></defs><path id="az-kv-2" d="M9,.5A8.5,8.5,0,1,0,17.5,9,8.51,8.51,0,0,0,9,.5ZM9,16.34A7.34,7.34,0,1,1,16.34,9,7.34,7.34,0,0,1,9,16.34Z" fill="url(#az-kv-0)" /><circle cx="9" cy="9" r="7.34" fill="#fff" /><g><path id="az-kv-3" d="M13.44,7.33a1.84,1.84,0,0,0,0-2.59h0L10.29,1.58a1.83,1.83,0,0,0-2.58,0h0L4.56,4.74a1.84,1.84,0,0,0,0,2.59L7.18,10a.51.51,0,0,1,.15.36v4.88a.63.63,0,0,0,.18.44l1.2,1.2a.41.41,0,0,0,.58,0l1.16-1.16h0l.68-.68a.25.25,0,0,0,0-.34l-.49-.49a.27.27,0,0,1,0-.37l.49-.49a.25.25,0,0,0,0-.34l-.49-.49a.27.27,0,0,1,0-.37l.49-.49a.25.25,0,0,0,0-.34l-.68-.69v-.25ZM9,2.35A1,1,0,0,1,9,4.42,1,1,0,1,1,9,2.35Z" fill="url(#az-kv-1)" /><path id="az-kv-4" d="M8.18,15.3h0a.23.23,0,0,0,.38-.17v-4a.24.24,0,0,0-.11-.2h0a.22.22,0,0,0-.34.2v4A.28.28,0,0,0,8.18,15.3Z" fill="#ff9300" opacity="0.75" /><rect id="az-kv-5" x="6.48" y="5.79" width="5.17" height="0.61" rx="0.28" fill="#ff9300" opacity="0.75" /><rect id="az-kv-6" x="6.48" y="6.78" width="5.17" height="0.61" rx="0.28" fill="#ff9300" opacity="0.75" /></g></symbol>
+<symbol id="az-mi" viewBox="0 0 18 18"><defs><linearGradient id="az-mi-0" x1="13.18" y1="13.01" x2="8.63" y2="4.38" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1988d9" /><stop offset="0.9" stop-color="#54aef0" /></linearGradient><linearGradient id="az-mi-1" x1="11.22" y1="10.5" x2="14.37" y2="15.93" gradientUnits="userSpaceOnUse"><stop offset="0.1" stop-color="#54aef0" /><stop offset="0.29" stop-color="#4fabee" /><stop offset="0.51" stop-color="#41a2e9" /><stop offset="0.74" stop-color="#2a93e0" /><stop offset="0.88" stop-color="#1988d9" /></linearGradient></defs><g><polygon points="1.15 10.22 8.93 15.27 16.85 10.21 17.85 11.36 8.93 17.11 0.15 11.37 1.15 10.22" fill="#50e6ff" /><polygon points="1.73 9.58 8.93 1 16.28 9.59 8.93 14.23 1.73 9.58" fill="#fff" /><polygon points="8.93 1 8.93 14.23 1.73 9.58 8.93 1" fill="#50e6ff" /><polygon points="8.93 1 8.93 14.23 16.28 9.59 8.93 1" fill="url(#az-mi-0)" /><polygon points="8.93 7.83 16.28 9.59 8.93 14.23 8.93 7.83" fill="#53b1e0" /><polygon points="8.93 14.23 1.73 9.58 8.93 7.83 8.93 14.23" fill="#9cebff" /><polygon points="8.93 17.11 17.85 11.36 16.85 10.21 8.93 15.27 8.93 17.11" fill="url(#az-mi-1)" /><g><path id="az-mi-2" d="M16.32,11.88a1.16,1.16,0,0,0,0-1.65h0l-2-2a1.16,1.16,0,0,0-1.64,0h0l-2,2a1.18,1.18,0,0,0,0,1.65l1.67,1.67a.32.32,0,0,1,.09.23v3.1a.36.36,0,0,0,.12.28l.76.76a.25.25,0,0,0,.37,0l.73-.73h0l.44-.44a.15.15,0,0,0,0-.21l-.31-.31a.16.16,0,0,1,0-.24l.31-.31a.16.16,0,0,0,0-.22l-.31-.31a.15.15,0,0,1,0-.23l.31-.32a.15.15,0,0,0,0-.21l-.44-.44v-.16ZM13.5,8.71a.66.66,0,1,1-.66.66.66.66,0,0,1,.66-.66Z" fill="#ffca00" /><path id="az-mi-3" d="M13,17h0a.14.14,0,0,0,.24-.11V14.33a.16.16,0,0,0-.06-.13h0a.14.14,0,0,0-.22.13v2.51A.15.15,0,0,0,13,17Z" fill="#ff9300" opacity="0.75" /><rect id="az-mi-4" x="11.9" y="10.9" width="3.29" height="0.39" rx="0.18" fill="#ff9300" opacity="0.75" /><rect id="az-mi-5" x="11.9" y="11.53" width="3.29" height="0.39" rx="0.18" fill="#ff9300" opacity="0.75" /></g></g></symbol>
+<symbol id="az-group" viewBox="0 0 18 18"><defs><linearGradient id="az-group-0" x1="6.7" y1="7.26" x2="6.7" y2="18.36" gradientUnits="userSpaceOnUse"><stop offset="0.22" stop-color="#32d4f5" /><stop offset="1" stop-color="#198ab3" /></linearGradient><linearGradient id="az-group-1" x1="6.42" y1="1.32" x2="7.23" y2="11.39" gradientUnits="userSpaceOnUse"><stop offset="0.22" stop-color="#32d4f5" /><stop offset="1" stop-color="#198ab3" /></linearGradient></defs><path d="M17.22,13.92a.79.79,0,0,0,.8-.79A.28.28,0,0,0,18,13c-.31-2.5-1.74-4.54-4.46-4.54S9.35,10.22,9.07,13a.81.81,0,0,0,.72.88h7.43Z" fill="#0078d4" /><path d="M13.55,9.09a2.44,2.44,0,0,1-1.36-.4l1.35,3.52,1.33-3.49A2.54,2.54,0,0,1,13.55,9.09Z" fill="#fff" opacity="0.8" /><circle cx="13.55" cy="6.58" r="2.51" fill="#0078d4" /><path d="M12.19,16.36a1.19,1.19,0,0,0,1.19-1.19.66.66,0,0,0,0-.14c-.47-3.74-2.6-6.78-6.66-6.78S.44,10.83,0,15a1.2,1.2,0,0,0,1.07,1.31h11.1Z" fill="url(#az-group-0)" /><path d="M6.77,9.14a3.72,3.72,0,0,1-2-.6l2,5.25,2-5.21A3.81,3.81,0,0,1,6.77,9.14Z" fill="#fff" opacity="0.8" /><circle cx="6.74" cy="5.39" r="3.75" fill="url(#az-group-1)" /></symbol>
+<symbol id="az-user" viewBox="0 0 18 18"><defs><linearGradient id="az-user-0" x1="9" y1="6.88" x2="9" y2="20.45" gradientUnits="userSpaceOnUse"><stop offset="0.22" stop-color="#32d4f5" /><stop offset="1" stop-color="#198ab3" /></linearGradient><linearGradient id="az-user-1" x1="8.61" y1="-0.4" x2="9.6" y2="11.92" gradientUnits="userSpaceOnUse"><stop offset="0.22" stop-color="#32d4f5" /><stop offset="1" stop-color="#198ab3" /></linearGradient></defs><path d="M15.72,18a1.45,1.45,0,0,0,1.45-1.45.47.47,0,0,0,0-.17C16.59,11.81,14,8.09,9,8.09S1.34,11.24.83,16.39A1.46,1.46,0,0,0,2.14,18H15.72Z" fill="url(#az-user-0)" /><path d="M9,9.17a4.59,4.59,0,0,1-2.48-.73L9,14.86l2.44-6.38A4.53,4.53,0,0,1,9,9.17Z" fill="#fff" opacity="0.8" /><circle cx="9.01" cy="4.58" r="4.58" fill="url(#az-user-1)" /></symbol>
+<symbol id="az-app" viewBox="0 0 18 18"><defs><linearGradient id="az-app-0" x1="-6518.78" y1="1118.86" x2="-6518.78" y2="1090.06" gradientTransform="matrix(0.5, 0, 0, -0.5, 3267.42, 559.99)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5ea0ef" /><stop offset="0.18" stop-color="#589eed" /><stop offset="0.41" stop-color="#4897e9" /><stop offset="0.66" stop-color="#2e8ce1" /><stop offset="0.94" stop-color="#0a7cd7" /><stop offset="1" stop-color="#0078d4" /></linearGradient></defs><path d="M5.67,10.61H10v4.32H5.67Zm-5-5.76H5V.53H1.23a.6.6,0,0,0-.6.6Zm.6,10.08H5V10.61H.63v3.72A.6.6,0,0,0,1.23,14.93Zm-.6-5H5V5.57H.63Zm10.08,5h3.72a.6.6,0,0,0,.6-.6V10.61H10.71Zm-5-5H10V5.57H5.67Zm5,0H15V5.57H10.71Zm0-9.36V4.85H15V1.13a.6.6,0,0,0-.6-.6Zm-5,4.32H10V.53H5.67Z" fill="url(#az-app-0)" /><polygon points="17.37 10.7 17.37 15.21 13.5 17.47 13.5 12.96 17.37 10.7" fill="#32bedd" /><polygon points="17.37 10.7 13.5 12.97 9.63 10.7 13.5 8.44 17.37 10.7" fill="#9cebff" /><polygon points="13.5 12.97 13.5 17.47 9.63 15.21 9.63 10.7 13.5 12.97" fill="#50e6ff" /><polygon points="9.63 15.21 13.5 12.96 13.5 17.47 9.63 15.21" fill="#9cebff" /><polygon points="17.37 15.21 13.5 12.96 13.5 17.47 17.37 15.21" fill="#50e6ff" /></symbol>
+<symbol id="az-ent" viewBox="0 0 18 18"><defs><linearGradient id="az-ent-0" x1="-6784.85" y1="1118.78" x2="-6784.85" y2="1089.98" gradientTransform="matrix(0.5, 0, 0, -0.5, 3400.41, 559.99)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5ea0ef" /><stop offset="0.18" stop-color="#589eed" /><stop offset="0.41" stop-color="#4897e9" /><stop offset="0.66" stop-color="#2e8ce1" /><stop offset="0.94" stop-color="#0a7cd7" /><stop offset="1" stop-color="#0078d4" /></linearGradient><linearGradient id="az-ent-1" x1="-1.47" y1="14.91" x2="17.16" y2="14.8" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#449cdd" stop-opacity="0.15" /><stop offset="0.16" stop-color="#2870ab" stop-opacity="0" /><stop offset="0.18" stop-color="#2469a3" stop-opacity="0.06" /><stop offset="0.23" stop-color="#1a5991" stop-opacity="0.19" /><stop offset="0.28" stop-color="#144f86" stop-opacity="0.27" /><stop offset="0.34" stop-color="#124c82" stop-opacity="0.3" /><stop offset="0.76" stop-color="#002851" stop-opacity="0.35" /><stop offset="0.9" stop-color="#2f7ab6" stop-opacity="0" /><stop offset="1" stop-color="#449cdd" stop-opacity="0" /></linearGradient><clipPath id="az-ent-2"><circle cx="13.26" cy="13.27" r="4.16" fill="none" /></clipPath></defs><path d="M5.61,10.65H9.94V15H5.61Zm-5-5.76H4.89V.57H1.17a.6.6,0,0,0-.6.6ZM1.17,15H4.89V10.65H.57v3.72A.6.6,0,0,0,1.17,15Zm-.6-5H4.89V5.61H.57Zm10.09,5h3.72a.6.6,0,0,0,.6-.6V10.65H10.66Zm-5-5H9.94V5.61H5.61Zm5.05,0H15V5.61H10.66Zm0-9.36V4.89H15V1.17a.6.6,0,0,0-.6-.6Zm-5,4.32H9.94V.57H5.61Z" fill="url(#az-ent-0)" /><path d="M10.66,15h4.15a.59.59,0,0,1-.18-.29h-4Z" opacity="0.95" fill="url(#az-ent-1)" /><circle cx="13.26" cy="13.27" r="4.16" fill="#32bedd" /><g clip-path="url(#az-ent-2)"><path d="M17.06,13.87c-.21.11-.51.05-.65.16a1.6,1.6,0,0,0-.63.66c0,.06,0,.15-.07.18-.28.19-.56.39-.3.81-.3,0-.2-.27-.34-.35a.77.77,0,0,0-1.06.54.34.34,0,0,0,.16.37.26.26,0,0,0,.36-.12.18.18,0,0,1,.26-.06c0,.16-.28.45.18.46.12,0,.09.14.06.23s.06.24.19.3,0,0,0,.05,0,0,0,0c-.37,0-.45-.45-.81-.5a4.28,4.28,0,0,1-.43-.14c-.27-.09-.58-.14-.64-.54a.77.77,0,0,0-.36-.49c-.12-.08-.19-.23-.31-.32a1,1,0,0,0-.22-.36.94.94,0,0,1-.14-.87,2.32,2.32,0,0,0-.1-1.68c-.1-.32-.12-.65-.48-.86s-.3.12-.44.05-.22.13-.26.15c-.29.08-.54.33-.91.29.14-.07.25-.11.35-.17s.29-.14.07-.38-.14-.59.45-.83c-.05-.14-.41-.11-.25-.37s.28-.13.43,0c.1-.19-.12-.43.05-.54a2.86,2.86,0,0,1,.72-.29.25.25,0,0,1,.34.11c.18.28.54.33.72.61.05.09.15,0,.22,0,.41-.14.68.12,1,.33s.27.34.53.31a.49.49,0,0,1,.21,0c.16.07.31.11.43-.06a.3.3,0,0,0,.26-.23c.06-.09.09-.22.24-.16A1.15,1.15,0,0,0,16,11c.13-.1.26-.16.11-.39a.37.37,0,0,1,.25-.56.54.54,0,0,1,.63.23c.19.34.25.73.47,1,.07.09,0,.13,0,.2s-.18,0-.28-.06l.07.43a.66.66,0,0,1-.82-.25c0-.12,0-.17.12-.23s.19-.11.19-.24a.19.19,0,0,0-.1-.2c-.08,0-.13,0-.15.09s-.33.25-.28.53-.19.22-.33.14c-.33-.17-.45.13-.59.29s0,.34.16.46.31.21.37.4a.88.88,0,0,0,.29-.58c0-.18.07-.43.32-.46a.43.43,0,0,1,.44.28c.05.11.13.12.23.13a8.79,8.79,0,0,1,.54,1.52l-.37-.05c0-.29-.25-.16-.39-.22C16.84,13.64,17.07,13.69,17.06,13.87Z" fill="#b4ec36" /><path d="M15.62,10.27c-.13-.12-.27-.23-.06-.4s.2-.29.3,0A.37.37,0,0,1,15.62,10.27Z" fill="#b4ec36" /><path d="M15.93,9.87c.11-.11.25-.1.27,0s-.13.19-.26.23S15.85,10,15.93,9.87Z" fill="#b4ec36" /><path d="M15.16,8.94,14.81,9c0-.25.25-.27.42-.23S15.21,8.89,15.16,8.94Z" fill="#b4ec36" /></g></symbol>
+</defs>
+</svg>
+
+<script>
+// ---------------------------------------------------------------------------
+// Pages: #architecture and #arch-* show the architecture page, any other hash the build guide
+// ---------------------------------------------------------------------------
+function showPage(scroll) {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const arch = id.startsWith("arch");
+  document.getElementById("page-guide").hidden = arch;
+  document.getElementById("page-arch").hidden = !arch;
+  document.querySelectorAll(".pages a").forEach((a) => {
+    if ((a.dataset.page === "arch") === arch) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  const target = id && document.getElementById(id);
+  if (target) target.scrollIntoView();
+  else if (scroll) window.scrollTo(0, 0);
+}
+addEventListener("hashchange", () => showPage(true));
+showPage(false);
+
+// ---------------------------------------------------------------------------
+// Architecture diagrams. Coordinates are in viewBox units (1000 wide).
+// zones: boundaries, with an icon, a label and sub lines; stack draws copies behind.
+// nodes: cards with an icon, a label, a sub line and a tooltip [title, html].
+// edges: polylines p, dashed or not, with a label (one or more lines) at `at`.
+// ---------------------------------------------------------------------------
+const svgEl = (tag, attrs, parent) => el(tag, Object.fromEntries(Object.entries(attrs).filter(([, v]) => v != null)), parent);
+
+function drawDiagram(svg, { zones = [], heads = [], edges = [], nodes = [], notes = [] }) {
+  const arrow = `${svg.id}-arrow`;
+  const marker = svgEl("marker", { id: arrow, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, svgEl("defs", {}, svg));
+  svgEl("path", { d: "M0 0 L10 5 L0 10 z", class: "arrowhead" }, marker);
+  zones.forEach((z) => {
+    for (let i = z.stack || 0; i >= 0; i--) {
+      svgEl("rect", { x: z.x + 6 * i, y: z.y - 6 * i, width: z.w, height: z.h, rx: 10, class: `zone ${z.kind || ""}` }, svg);
+    }
+    if (z.icon) svgEl("use", { href: `#${z.icon}`, x: z.x + 10, y: z.y + 8, width: 16, height: 16 }, svg);
+    const tx = z.x + (z.icon ? 32 : 12);
+    svgEl("text", { x: tx, y: z.y + 21, class: "zlbl" }, svg).textContent = z.label;
+    [].concat(z.sub || []).forEach((s, i) => { svgEl("text", { x: tx, y: z.y + 35 + 13 * i, class: "zsub" }, svg).textContent = s; });
+  });
+  heads.forEach(([x, text]) => { svgEl("text", { x, y: 30, "text-anchor": "middle", class: "colhead" }, svg).textContent = text; });
+  edges.forEach((e) => {
+    svgEl("path", { d: "M" + e.p.map((pt) => pt.join(" ")).join(" L"), class: e.cls || (e.dash ? "edge dash" : "edge"), "marker-end": e.end === false ? null : `url(#${arrow})` }, svg);
+  });
+  nodes.forEach((n) => {
+    const h = n.h || 44, is = h > 40 ? 24 : 22, g = svgEl("g", { class: "node" }, svg);
+    svgEl("rect", { x: n.x, y: n.y, width: n.w, height: h, rx: 8 }, g);
+    svgEl("use", { href: `#${n.icon}`, x: n.x + 9, y: n.y + (h - is) / 2, width: is, height: is }, g);
+    const tx = n.x + is + 16, cy = n.y + h / 2;
+    svgEl("text", { x: tx, y: n.sub ? cy - 2 : cy + 4, class: "nlbl" }, g).textContent = n.label;
+    if (n.sub) svgEl("text", { x: tx, y: cy + 11, class: "nsub" }, g).textContent = n.sub;
+    if (n.tip) hoverable(g, `<strong>${n.tip[0]}</strong>${n.tip[1]}`);
+  });
+  edges.filter((e) => e.label).forEach((e) => {
+    [].concat(e.label).forEach((line, i) => {
+      svgEl("text", { x: e.at[0], y: e.at[1] + 11 * i, "text-anchor": e.anchor || "middle", class: "elbl" }, svg).textContent = line;
+    });
+  });
+  notes.forEach((t) => { svgEl("text", { x: t.x, y: t.y, "text-anchor": t.anchor, class: t.cls || "zsub" }, svg).textContent = t.text; });
+}
+
+// Where things live: one environment drawn three deep, the tenant, the account and the shared resources
+const OVERVIEW = (() => {
+  const card = (x, y, icon, label, sub, tip, w = 156) => ({ x, y, w, h: 38, icon, label, sub, tip });
+  const row = (i) => 154 + 46 * i;
+  return {
+    zones: [
+      { x: 16, y: 40, w: 540, h: 500, kind: "sub stacked", stack: 2, icon: "az-sub", label: "Subscription per environment", sub: "dev, test and prod: one module, one plan each" },
+      { x: 30, y: 88, w: 512, h: 388, kind: "rg", icon: "az-rg", label: "px-lakehouse-‹e›-rg", sub: "westeurope" },
+      { x: 30, y: 484, w: 512, h: 48, kind: "rg", icon: "az-rg", label: "px-lakehouse-dbr-managed-‹e›-rg", sub: "Databricks makes and locks it" },
+      { x: 612, y: 40, w: 372, h: 136, kind: "sub", icon: "az-group", label: "Entra ID tenant", sub: "plans/user_management" },
+      { x: 612, y: 196, w: 372, h: 128, kind: "dbx", icon: "az-dbr", label: "Databricks account" },
+      { x: 612, y: 344, w: 372, h: 204, kind: "sub", icon: "az-sub", label: "Prod subscription", sub: "and the shared parts" },
+      { x: 622, y: 390, w: 352, h: 72, kind: "rg", icon: "az-rg", label: "px-lakehouse-uc-rg" },
+      { x: 622, y: 470, w: 352, h: 70, kind: "rg", icon: "az-rg", label: "px-lakehouse-tfstate-rg" },
+    ],
+    notes: [
+      { x: 44, y: 146, text: "NETWORK", cls: "colhead" },
+      { x: 210, y: 146, text: "DATA", cls: "colhead" },
+      { x: 376, y: 146, text: "DATABRICKS", cls: "colhead" },
+    ],
+    edges: [
+      { p: [[532, 173], [590, 173], [590, 295], [622, 295]], label: "assigned", at: [590, 239] },
+      { p: [[786, 314], [786, 420]], label: "root storage", at: [786, 337] },
+      { p: [[786, 168], [786, 230]], label: "resolved", at: [786, 189] },
+    ],
+    nodes: [
+      card(44, row(0), "az-vnet", "Virtual network", "10.‹n›.0.0/16", ["px-lakehouse-‹e›-vnet", "10.‹n›.0.0/16. Subnets private and public for Databricks, and private-endpoints."]),
+      card(44, row(1), "az-nsg", "NSG", "Databricks subnets", ["px-lakehouse-‹e›-nsg", "On both Databricks subnets. No rules of its own: the clusters use the private link."]),
+      card(44, row(2), "az-rt", "Route table", "no routes yet", ["px-lakehouse-‹e›-rt", "On both Databricks subnets. It has no routes."]),
+      card(44, row(3), "az-nat", "NAT gateway", "cluster traffic out", ["px-lakehouse-‹e›-nat", "Outbound traffic of the public (host) subnet."]),
+      card(44, row(4), "az-pip", "Public IP", "static, on the NAT", ["px-lakehouse-‹e›-public-ip", "Static, Standard. The address the clusters use to go out."]),
+      card(44, row(5), "az-pe", "Private endpoints", "workspace · SQL", ["Private endpoints", "px-lakehouse-‹e›-dbr-pe: workspace back end.<br>px-lakehouse-‹e›-sqlsrv-pe: SQL server."]),
+      card(44, row(6), "az-dns", "Private DNS zones", "databricks · database", ["Private DNS zones", "privatelink.azuredatabricks.net<br>privatelink.database.windows.net<br>Both linked to the VNet."]),
+      card(210, row(0), "az-sa", "Storage account", "ADLS · 5 containers", ["pxlakehouse‹e›sa02", "ADLS Gen2, Standard LRS. Containers landing, catalog, bronze, silver, gold."]),
+      card(210, row(1), "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC. Soft delete 7 days. Behind the secret scope px-lakehouse-keyvault."]),
+      card(210, row(2), "az-sqlsrv", "SQL server", "germanywestcentral", ["px-lakehouse-‹e›-sqlsrv", "germanywestcentral: westeurope refuses new SQL servers. Entra ID logins only. Public access off."]),
+      card(210, row(3), "az-sqldb", "SQL database", "serverless, pauses", ["px-lakehouse-‹e›-sqldb", "Serverless GP_S_Gen5_1: 0.5 to 1 vCore, pauses after 60 minutes, 10 GB."]),
+      card(210, row(4), "az-adf", "Data Factory", "empty for now", ["px-lakehouse-‹e›-adf", "No pipelines or network settings in the code yet."]),
+      card(376, row(0), "az-dbr", "Workspace", "Databricks premium", ["px-lakehouse-‹e›-dbr", "Premium. VNet injection, no public IP. The network policy guards its front end."]),
+      card(376, row(1), "az-mi", "Access connector", "for the lake (adls)", ["px-lakehouse-‹e›-dbr-adls-connector", "Managed identity behind the storage credential with the same name."]),
+      card(376, row(2), "az-mi", "Access connector", "for SQL (sqlsrv)", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Managed identity behind the service credential with the same name. Writes to the SQL database."]),
+      card(376, 489, "az-sa", "DBFS storage", "pxlakehouse‹e›dbfs", ["pxlakehouse‹e›dbfs", "The workspace's root storage. Databricks manages it."]),
+      card(622, 86, "az-app", "App registrations", "deploy, run-as, SQL ×3", ["App registrations", "Per environment: deploy SP, run-as SP and SQL SP. Also px-lakehouse-sp, retired."], 170),
+      card(802, 86, "az-user", "Admin user", "Owner of 3 subscriptions", ["Admin user", "Owner of the 3 subscriptions, Databricks account admin, Entra admin of the SQL servers."], 170),
+      card(622, 130, "az-group", "Groups", "personas ×9, KV mgrs ×3", ["Entra groups", "px-lakehouse-‹e›-engineers, -readers, -support (9)<br>px-lakehouse-‹e›-keyvault-managers (3)<br>Members are set in Entra ID, not in the code."], 170),
+      card(802, 130, "az-ent", "AzureDatabricks", "reads the key vaults", ["AzureDatabricks", "First-party app. Key Vault Secrets User on each key vault, for the secret scope."], 170),
+      card(622, 230, "az-group", "Account groups", "Entra personas, admins", ["Account groups", "px-lakehouse-‹e›-admins: admin users and the deploy SP.<br>px-lakehouse-metastore-admins: people only.<br>The persona groups, resolved from Entra ID by the environment plans."], 170),
+      card(802, 230, "az-app", "Service principals", "deploy, run-as ×3", ["Service principals", "px-lakehouse-‹e›-deploy-sp and px-lakehouse-‹e›-run-sp, registered from Entra ID."], 170),
+      card(622, 276, "az-dbr", "UC metastore", "serves all 3 workspaces", ["px-lakehouse-uc-dbr-metastore", "westeurope, one per region. Owner: px-lakehouse-metastore-admins."], 170),
+      card(802, 276, "az-pl", "NCC, network policy", "one each per workspace", ["Per workspace", "px-lakehouse-‹e›-ncc: five private endpoint rules for serverless.<br>px-lakehouse-‹e›-network-policy: who may reach the front end."], 170),
+      card(632, 420, "az-sa", "Metastore storage", "pxlakehouseucsa02", ["pxlakehouseucsa02", "Container metastore: the metastore root."], 164),
+      card(804, 420, "az-mi", "Access connector", "metastore root", ["px-lakehouse-uc-dbr-connector", "The metastore's root credential."], 160),
+      card(632, 497, "az-sa", "State storage", "Entra only, versioned", ["pxlakehousetfstatesa", "Entra ID only, no shared keys. Versioning on. Deleted blobs and containers kept 30 days."], 164),
+      card(804, 497, "az-sa", "4 containers", "infra, data ×3", ["State containers", "px-lakehouse-infra: every plan here.<br>px-lakehouse-data, -data-t, -data-p: one per deploy SP."], 160),
+    ],
+  };
+})();
+
+// Network of one environment: solid lines are private addresses, dashed lines public endpoints
+const NETWORK = (() => {
+  const card = (x, y, w, icon, label, sub, tip) => ({ x, y, w, icon, label, sub, tip });
+  return {
+    zones: [
+      { x: 196, y: 44, w: 468, h: 172, kind: "dbx", icon: "az-dbr", label: "Databricks", sub: "runs in Databricks' own subscriptions" },
+      { x: 196, y: 256, w: 468, h: 340, kind: "vnet", icon: "az-vnet", label: "px-lakehouse-‹e›-vnet", sub: "10.‹n›.0.0/16" },
+      { x: 212, y: 304, w: 212, h: 166, kind: "subnet", label: "Databricks subnets", sub: ["public 10.‹n›.2.0/24", "private 10.‹n›.1.0/24", "NSG · route table"] },
+      { x: 440, y: 304, w: 208, h: 166, kind: "subnet", label: "private-endpoints", sub: "10.‹n›.3.0/24" },
+    ],
+    notes: [
+      { x: 254, y: 156, text: "lets in the 2 IPs: UI and API" },
+      { x: 254, y: 169, text: "and the deploy SP: API only" },
+    ],
+    edges: [
+      { p: [[168, 114], [212, 114]], dash: true, label: "HTTPS", at: [190, 107] },
+      { p: [[168, 192], [240, 192], [240, 136]], dash: true },
+      { p: [[348, 114], [368, 114]] },
+      { p: [[400, 392], [432, 392], [432, 374], [464, 374]] },
+      { p: [[600, 352], [600, 226], [436, 226], [436, 136]], label: "private link", at: [442, 186], anchor: "start" },
+      { p: [[400, 410], [452, 410], [452, 434], [464, 434]] },
+      { p: [[628, 434], [712, 434]], label: "port 1433", at: [676, 428] },
+      { p: [[318, 422], [318, 530]], label: "traffic out", at: [324, 456], anchor: "start" },
+      { p: [[236, 552], [168, 552]], dash: true },
+      { p: [[92, 530], [92, 484]], dash: true },
+      { p: [[589, 136], [589, 160]] },
+      { p: [[652, 182], [680, 182], [680, 24], [940, 24], [940, 434]], end: false, label: "5 private endpoints from the NCC, approved by the plan", at: [810, 17] },
+      { p: [[940, 172], [864, 172]], label: "blob dfs queue", at: [902, 166] },
+      { p: [[940, 292], [864, 292]], label: "vault", at: [902, 286] },
+      { p: [[940, 434], [864, 434]], label: "sqlServer", at: [902, 428] },
+      { p: [[392, 378], [392, 244], [780, 244], [780, 194]], dash: true, label: "service endpoint", at: [700, 238] },
+    ],
+    nodes: [
+      card(16, 92, 152, "az-user", "Users", "from 2 allowed IPs", ["People", "Through the workspace front end, from 83.84.179.42 or 91.201.164.7 only."]),
+      card(16, 170, 152, "x-ci", "GitHub Actions", "as the deploy SP", ["CI", "px-lakehouse-data's workflow, signed in as px-lakehouse-‹e›-deploy-sp. Any address, the API only."]),
+      card(16, 440, 152, "x-globe", "Internet", "any address", ["Internet", "Packages, APIs and other sources. Not filtered."]),
+      card(16, 530, 152, "az-pip", "Public IP", "static", ["px-lakehouse-‹e›-public-ip", "The one address the classic clusters go out from."]),
+      card(212, 92, 136, "x-shield", "Network policy", "front door", ["px-lakehouse-‹e›-network-policy", "On the Databricks account. Ingress: the 2 IPs for everything, the deploy SP for the API. Egress: open."]),
+      card(368, 92, 136, "az-dbr", "Control plane", "UI and API", ["Workspace control plane", "px-lakehouse-‹e›-dbr: the UI, the API and the job scheduler."]),
+      card(526, 92, 126, "az-dbr", "Serverless", "compute", ["Serverless compute", "SQL warehouses, jobs and notebooks on serverless. Runs outside the VNet."]),
+      card(526, 160, 126, "az-pl", "NCC", "endpoint rules", ["px-lakehouse-‹e›-ncc", "Five private endpoint rules: storage blob, dfs and queue, key vault, SQL server. The environment plan approves each one on its target."]),
+      card(236, 378, 164, "az-dbr", "Classic clusters", "no public IP", ["Classic clusters", "VMs with a NIC in each Databricks subnet. Secure cluster connectivity: no public IP."]),
+      card(464, 352, 164, "az-pe", "dbr-pe", "back end (ui_api)", ["px-lakehouse-‹e›-dbr-pe", "Private endpoint to the workspace (databricks_ui_api). The clusters reach the control plane through it."]),
+      card(464, 412, 164, "az-pe", "sqlsrv-pe", "sqlServer", ["px-lakehouse-‹e›-sqlsrv-pe", "Private endpoint to the SQL server, here in westeurope. The server is in germanywestcentral."]),
+      card(236, 530, 164, "az-nat", "NAT gateway", "on the public subnet", ["px-lakehouse-‹e›-nat", "Outbound traffic of the host subnet, from one static address."]),
+      card(464, 530, 164, "az-dns", "Private DNS ×2", "linked to the VNet", ["Private DNS zones", "privatelink.azuredatabricks.net and privatelink.database.windows.net. The endpoints' records are in them."]),
+      card(712, 150, 152, "az-sa", "Storage account", "public endpoint, RBAC", ["pxlakehouse‹e›sa02", "No firewall. Classic clusters arrive by the service endpoint, serverless by the NCC endpoints."]),
+      card(712, 270, 152, "az-kv", "Key vault", "public endpoint, RBAC", ["px-lakehouse-‹e›-kv", "No firewall. Serverless arrives by the NCC endpoint. The control plane reads it for the secret scope."]),
+      card(712, 412, 152, "az-sqlsrv", "SQL server", "public access off", ["px-lakehouse-‹e›-sqlsrv", "Reachable only through its private endpoints: sqlsrv-pe and the NCC's."]),
+    ],
+  };
+})();
+
+// Access paths: who holds a grant, on what, what Unity Catalog uses, as which identity, on which resource
+const ACCESS = (() => {
+  const card = (x, y, icon, label, sub, tip, w = 156, h = 44) => ({ x, y, w, h, icon, label, sub, tip });
+  const [c1, c2, c3, c4, c5] = [16, 212, 408, 604, 840];
+  return {
+    heads: [[94, "WHO"], [290, "GRANTED ON"], [486, "UNITY CATALOG USES"], [682, "AZURE IDENTITY"], [912, "AZURE RESOURCE"]],
+    notes: [{ x: 16, y: 368, text: "Azure roles held directly", cls: "colhead" }],
+    edges: [
+      { p: [[172, 70], [212, 70]], label: "grants", at: [192, 63] },
+      { p: [[368, 70], [408, 70]], label: "uses", at: [388, 63] },
+      { p: [[564, 70], [604, 70]], label: "as", at: [584, 63] },
+      { p: [[760, 70], [840, 70]], label: ["Blob Data", "Contributor"], at: [800, 52] },
+      { p: [[172, 150], [408, 150]], label: "ACCESS", at: [290, 143] },
+      { p: [[564, 150], [604, 150]], label: "as", at: [584, 143] },
+      { p: [[760, 150], [840, 150]], label: ["writer,", "ddladmin"], at: [800, 132] },
+      { p: [[172, 220], [212, 220]], label: "SELECT", at: [192, 213] },
+      { p: [[368, 220], [408, 220]], label: "via", at: [388, 213] },
+      { p: [[564, 220], [604, 220]], label: "as", at: [584, 213] },
+      { p: [[760, 220], [840, 220]], label: "reader", at: [800, 213] },
+      { p: [[172, 300], [212, 300]], label: "ACLs", at: [192, 293] },
+      { p: [[368, 300], [604, 300]], label: "backed by", at: [486, 293] },
+      { p: [[760, 300], [840, 300]], label: ["Secrets", "User"], at: [800, 282] },
+      { p: [[290, 278], [290, 262], [440, 262], [440, 242]], dash: true, label: "client secret", at: [365, 257] },
+      { p: [[16, 350], [800, 350]], cls: "divider", end: false },
+      { p: [[172, 400], [840, 400]], label: "Key Vault Secrets Officer, Reader", at: [506, 393] },
+      { p: [[172, 462], [840, 462]], label: "Storage Blob Data Contributor, on its own container", at: [506, 455] },
+    ],
+    nodes: [
+      card(c1, 48, "az-group", "Persona groups", "and the run-as SP", ["Lake data", "Engineers, readers and support, and the jobs. Their grants are in px-lakehouse-data, per catalog, schema and volume."]),
+      card(c2, 48, "az-dbr", "Catalog, schemas", "px_ucc_phoenix_‹e›", ["px_ucc_phoenix_‹e›", "Isolated, bound to the environment's workspace. Schemas audit, metadata, bronze, silver, gold. Volumes on landing."]),
+      card(c3, 48, "az-dbr", "External locations", "landing, catalog", ["External locations", "px_lakehouse_exloc_landing_‹e› and px_lakehouse_exloc_catalog_‹e›, on the storage credential px-lakehouse-‹e›-dbr-adls-connector."]),
+      card(c4, 48, "az-mi", "adls connector", "managed identity", ["px-lakehouse-‹e›-dbr-adls-connector", "Also Storage Queue Data Contributor and Storage Account Contributor on the account, and EventGrid EventSubscription Contributor on the resource group, for file events."]),
+      card(c5, 48, "az-sa", "Storage account", "pxlakehouse‹e›sa02", ["pxlakehouse‹e›sa02", "Nobody else holds a data role on it."], 144),
+      card(c1, 128, "az-app", "Run-as SP", "jobs run as it", ["px-lakehouse-‹e›-run-sp", "In dev, the engineers also have ACCESS: bundles in development mode run as the developer."]),
+      card(c3, 128, "az-dbr", "Service credential", "this workspace only", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Unity Catalog service credential. Owned by the metastore admins, isolated, bound to the workspace."]),
+      card(c4, 128, "az-mi", "sqlsrv connector", "managed identity", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Its user in the database and the roles db_datareader, db_datawriter, db_ddladmin are made by hand."]),
+      card(c5, 128, "az-sqldb", "SQL database", "Entra logins only", ["px-lakehouse-‹e›-sqldb", "Two identities reach it: the sqlsrv connector to write, the SQL SP to read."], 144, 114),
+      card(c1, 198, "az-group", "Engineers", "and the run-as SP", ["Federation", "Dev only, for now. Readers do not see the foreign catalog."]),
+      card(c2, 198, "az-dbr", "Foreign catalog", "dev only, read-only", ["px_fed_phoenix_sqlsrv_d", "On the connection px-lakehouse-d-sqlsrv, database px-lakehouse-d-sqldb."]),
+      card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-d-sqlsrv", "Made by hand with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
+      card(c4, 198, "az-app", "SQL SP", "client secret", ["px-lakehouse-‹e›-sql-sp", "Only db_datareader: whoever reads the secret scope can act as it."]),
+      card(c1, 278, "az-group", "Run-as SP, admins", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. Environment admins: MANAGE. In dev, engineers: READ."]),
+      card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "Backed by the environment's key vault."]),
+      card(c4, 278, "az-ent", "AzureDatabricks", "first-party app", ["AzureDatabricks", "Databricks reads the key vault as this app for every key vault-backed secret scope."]),
+      card(c5, 278, "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC, not access policies: changing the vault does not give its secrets."], 144, 144),
+      card(c1, 378, "az-group", "Key vault managers", "Entra group", ["px-lakehouse-‹e›-keyvault-managers", "Manage and renew the secrets, such as the SQL SP's client secret."]),
+      card(c1, 440, "az-app", "Deploy SP", "GitHub Actions, OIDC", ["px-lakehouse-‹e›-deploy-sp", "Writes its own environment's Terraform state only. In Databricks it is a member of the environment admin group."]),
+      card(c5, 440, "az-sa", "State container", "its own only", ["pxlakehousetfstatesa", "Containers px-lakehouse-data, -data-t and -data-p, one per deploy SP."], 144),
+    ],
+  };
+})();
+
+drawDiagram(document.getElementById("arch-overview-svg"), OVERVIEW);
+drawDiagram(document.getElementById("arch-network-svg"), NETWORK);
+drawDiagram(document.getElementById("arch-access-svg"), ACCESS);
 </script>
 </body>
 </html>
