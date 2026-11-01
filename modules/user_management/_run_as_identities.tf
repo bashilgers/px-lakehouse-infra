@@ -4,7 +4,6 @@
 # The environment's jobs and pipelines run as this one; nothing logs in as it.
 # It has no secret, no federated credential and no Azure roles: Databricks runs
 # jobs as it without any. Its data access is granted in px-lakehouse-data.
-# Replaces px-lakehouse-sp (_service_principals.tf).
 
 # Create app in app registry per environment
 resource "azuread_application_registration" "px_run_sp" {

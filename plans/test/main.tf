@@ -26,3 +26,11 @@ module "lakehouse" {
     environment         = "test"
   }
 }
+
+# Adopt the persona groups that automatic identity management resolves into the
+# Databricks account, so a destroy deletes them (modules/lakehouse/_workspace_access.tf)
+import {
+  for_each = module.lakehouse.persona_group_ids
+  to       = module.lakehouse.databricks_group.px_persona[each.key]
+  id       = each.value
+}

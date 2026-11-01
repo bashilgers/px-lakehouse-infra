@@ -215,23 +215,25 @@
 <p>The full build, from the repository root. Section 4 explains each step.</p>
 <div class="card">
 <pre><code>export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97
+export GITHUB_TOKEN=$(gh auth token)              # user_management writes px-lakehouse-data's GitHub settings
 
-plans/terraform_state/bootstrap.sh                 # 1. first time only; later: init and apply
+plans/terraform_state/bootstrap.sh                 # 1. first time only, logs you in again; later: init and apply
 for p in user_management unity_catalog_metastore; do  # 2. and 3.
   terraform -chdir=plans/$p init && terraform -chdir=plans/$p apply
 done
-for env in dev test prod; do                       # 4. in parallel, about 8 minutes
-  (terraform -chdir=plans/$env init && terraform -chdir=plans/$env apply -auto-approve) &
-done; wait
+for env in dev test prod; do                       # 4. about 8 minutes each; to run them in parallel,
+  terraform -chdir=plans/$env init && terraform -chdir=plans/$env apply   # start them a minute apart
+done
 
 # 5. in px-lakehouse-data (its docs/build-guide.html): per environment, scripts/sql-access.sh,
-#    then one CI run (Actions > databricks-infra > Run workflow). Each waits on its script.
+#    then one CI run (Actions > databricks-infra > Run workflow). No IDs to copy.
 for env in dev test prod; do scripts/sql-access.sh $env; done
 for env in dev test prod; do gh workflow run databricks-infra.yml --ref main -f environment=$env; done</code></pre>
-<p style="margin: 0">To tear down, after px-lakehouse-data's objects:</p>
+<p style="margin: 0">To tear down, after px-lakehouse-data's objects (its <code>scripts/teardown-environment.sh &lt;env&gt;</code>):</p>
 <pre style="margin-bottom: 0"><code>for env in dev test prod; do scripts/teardown-environment.sh $env; done
 terraform -chdir=plans/unity_catalog_metastore destroy
-terraform -chdir=plans/user_management destroy</code></pre>
+terraform -chdir=plans/user_management destroy     # with GITHUB_TOKEN set
+plans/terraform_state/teardown.sh</code></pre>
 </div>
 
 <h2 id="before">3. Before you start</h2>
@@ -242,7 +244,9 @@ terraform -chdir=plans/user_management destroy</code></pre>
   </ul>
 <pre><code>export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <ul class="plain">
+    <li>For step 2 and the identities' teardown, set <code>GITHUB_TOKEN</code> to a token that administers px-lakehouse-data, such as <code>gh auth token</code>: the plan makes the repository's GitHub environments and its variable <code>DEPLOY_CLIENT_IDS</code>.</li>
     <li>Each provider copy is about 350 MB. Set <code>TF_PLUGIN_CACHE_DIR</code> to keep one copy for all plans.</li>
+    <li>To read each change before it happens, plan with <code>-out</code> and apply that file. The rebuild of 2026-11-01 ran every step that way, the teardowns included.</li>
   </ul>
 </div>
 
@@ -267,28 +271,28 @@ terraform -chdir=plans/user_management destroy</code></pre>
 </div>
 
 <h2 id="hand">6. Steps by hand</h2>
-<p>These steps stay manual on purpose. They handle secret values, or they need access that Terraform does not have. Do them between step 4 and step 5.</p>
+<p>Two steps stay outside Terraform on purpose. A fresh login while step 1 makes the state account, which your older token can't reach. And the SQL database's users, secret and connection, which Terraform would keep the secret of in its state.</p>
 <div class="card table-wrap" id="hand-table"></div>
 
 <h2 id="teardown">7. Tear down</h2>
 <div class="card">
-  <p>Do the steps in reverse order.</p>
+  <p>Do the steps in reverse order. Each is Terraform only; the scripts lift the guards for their run.</p>
   <ol>
-    <li><span class="label-inline">Data objects.</span> Destroy px-lakehouse-data's objects in each environment first, one command each: <code>scripts/teardown-environment.sh &lt;env&gt;</code> in px-lakehouse-data. It lifts their guards for that run.</li>
-    <li><span class="label-inline">Environments.</span> Run one command per environment:<pre><code>scripts/teardown-environment.sh dev</code></pre>For this run only, the script writes an override file into the module. The file lifts <code>prevent_destroy</code>, opens the isolated credentials (else the destroy cannot delete them after their bindings) and lets the resource group go with what Azure added to it. The account still counts a deleted workspace for 5 to 11 minutes, and refuses to delete the network connectivity config while it does. Thus the script does the destroy again every 2 minutes until it is complete. At the end, it makes sure through the account API that the storage credential is gone: a credential delete that finds nothing passes silently. Add <code>-auto-approve</code> to run it without questions.</li>
-    <li><span class="label-inline">Metastore.</span> Run <code>terraform destroy</code>. Terraform cannot update the metastore (a provider error on the Delta Sharing token lifetime). If the metastore still holds objects, delete it with <code>databricks account metastores delete &lt;id&gt; --force</code>.</li>
-    <li><span class="label-inline">Identities.</span> Run <code>terraform destroy</code>. The Entra group members are not in the code: write them down first.</li>
-    <li><span class="label-inline">State storage.</span> Delete it last, by hand. It has <code>prevent_destroy</code> for this reason.</li>
+    <li><span class="label-inline">Data objects.</span> Destroy px-lakehouse-data's objects in each environment first, one command each: <code>scripts/teardown-environment.sh &lt;env&gt;</code> in px-lakehouse-data. For that run it lifts their guards, sets <code>force_destroy</code> and opens the isolated catalogs and external locations, as the destroy deletes their bindings first.</li>
+    <li><span class="label-inline">Environments.</span> Run one command per environment:<pre><code>scripts/teardown-environment.sh dev</code></pre>For this run only, the script writes an override file into the module. The file lifts <code>prevent_destroy</code>, opens the isolated credentials (else the destroy cannot delete them after their bindings) and lets the resource group go with what Azure added to it. The persona groups the plan adopted in the Databricks account go too. The account still counts a deleted workspace for 5 to 11 minutes, and refuses to delete the network connectivity config while it does. Thus the script does the destroy again every 2 minutes until it is complete. At the end, it makes sure through the account API that the storage credential is gone: a credential delete that finds nothing passes silently. Add <code>-auto-approve</code> to run it without questions.</li>
+    <li><span class="label-inline">Metastore.</span> Run <code>terraform destroy</code>. It has no root credential to block it, and <code>force_destroy</code> takes whatever it still holds.</li>
+    <li><span class="label-inline">Identities.</span> Run <code>terraform destroy</code>, with <code>GITHUB_TOKEN</code> set: it also deletes px-lakehouse-data's GitHub environments and <code>DEPLOY_CLIENT_IDS</code>. Write down the group members beyond the admins first.</li>
+    <li><span class="label-inline">State storage.</span> Run <code>plans/terraform_state/teardown.sh</code>. It moves the plan's state out of the account it is about to delete, lifts <code>prevent_destroy</code> for that run and destroys the account and the platform admin group.</li>
   </ol>
   <div class="viz-title" style="margin-top: 14px">One environment, built and torn down</div>
   <div class="viz-sub">The proof on the throwaway environment <code>x</code>, 2026-10-31, UTC: from nothing to a working data platform and back, with the final plans of both repositories, the secret scope and the default catalog included. Step 5 ran locally, as <code>x</code> has no CI. After each build every plan showed no changes, the queues and the foreign catalog answered. The environment's teardown includes one retry while the account still counted the deleted workspace.</div>
   <div class="scroll"><svg id="proof" width="100%" role="img" aria-label="Build and teardown of the throwaway environment x, the whole flow"></svg></div>
   <details class="table-view"><summary>Show as table</summary><div class="table-wrap" id="proof-table"></div></details>
-  <p class="why">The service principals of dev, test and prod predate the delete flag. Until Terraform updates them, a destroy only deactivates them on the account. Delete them with <code>databricks account service-principals delete</code> before you build again.</p>
+  <p class="why">After the teardown of 2026-11-01 nothing of the platform was left: not in Azure, Entra ID, GitHub, nor in the Databricks account, which kept only its own <code>default-policy</code> and <code>account users</code>.</p>
 </div>
 
 <h2 id="ids">8. Current IDs</h2>
-<p>For px-lakehouse-data's <code>env.tfvars</code> and grants, and its workflow. The infrastructure plans do not need them.</p>
+<p>For reference: nothing copies them any more. px-lakehouse-data names the workspace by its Azure resource ID and the service principals by display name, and looks the IDs up; its workflow reads the deploy client IDs from <code>DEPLOY_CLIENT_IDS</code>.</p>
 <div class="card table-wrap" id="ids-table"></div>
 
 <h2 id="history">9. History</h2>
@@ -296,12 +300,13 @@ terraform -chdir=plans/user_management destroy</code></pre>
   <div class="card">
     <p><span class="label-inline">2026-10-31, morning.</span> Everything was torn down and rebuilt with the old plans. The plans depended on each other in a loop: three plans ran two times, with targeted applies, code changes and manual steps between them.</p>
     <p><span class="label-inline">2026-10-31, afternoon.</span> The loop was removed (px-lakehouse-infra #29). A test environment <code>x</code> proved it: built from zero in one apply, and torn down with one command. Then dev, test and prod moved to the new plans with imports, without a change to a live resource.</p>
+    <p><span class="label-inline">2026-11-01.</span> Names made consistent (#39, #40, px-lakehouse-data #35): the environment after <code>px-lakehouse</code> in Azure names, last in Unity Catalog names, <code>-kv</code> for the key vault. Then everything was torn down, the state account included, and rebuilt with Terraform only (#41, #42). The teardown ran from the code that built the platform. Four things outside any state were cleaned up once: the persona groups and the deactivated service principals left in the Databricks account, the GitHub environments made by hand, and the metastore, deleted with <code>--force</code> because Terraform deleted its root credential first. The rebuild needed one login and one code fix: automatic identity management refused to let user_management create the persona groups, so the environment plans adopt them instead. It took 48 minutes, and every plan showed no changes.</p>
     <p><span class="label-inline">2026-10-31, evening.</span> The secret scope and the default catalog moved into step 4 (#30), and px-lakehouse-data got one apply per environment. All three environments were federated. Then <code>x</code> proved the whole flow, data included: identities, environment, SQL script, data objects, the checks, and the teardown of all of it, in 21 minutes.</p>
   </div>
   <div class="card">
-    <div class="viz-title">Timeline of the rebuild with the old plans</div>
-    <div class="viz-sub">Wall-clock time on 2026-10-31, from the logs. The environments ran in parallel. The endpoint approval time is approximate.</div>
-    <div class="scroll"><svg id="gantt" width="100%" role="img" aria-label="Timeline of the rebuild with the old plans"></svg></div>
+    <div class="viz-title">Timeline of the teardown and rebuild, 2026-11-01</div>
+    <div class="viz-sub">UTC, from the logs. The environments ran in parallel. The metastore's teardown includes the wait for a decision, and the state storage's build the wait for a login.</div>
+    <div class="scroll"><svg id="gantt" width="100%" role="img" aria-label="Timeline of the teardown and rebuild of 2026-11-01"></svg></div>
     <details class="table-view"><summary>Show as table</summary><div class="table-wrap" id="gantt-table"></div></details>
   </div>
 </div>
@@ -313,7 +318,7 @@ terraform -chdir=plans/user_management destroy</code></pre>
 <header>
   <h1>px-lakehouse: architecture</h1>
   <p class="lede">What the platform is made of, where each part lives, how the network connects the parts, and who can reach what. Dev, test and prod are three copies of one Terraform module, each in its own subscription. One metastore and one state account serve all three.</p>
-  <p class="meta">From the code of px-lakehouse-infra and px-lakehouse-data on main, 2026-10-31. In names, ‹e› is d, t or p, and ‹n› is 1, 2 or 3. Point at a box in a diagram for its details.</p>
+  <p class="meta">From the code of px-lakehouse-infra and px-lakehouse-data on main, 2026-11-01. In names, ‹e› is d, t or p, and ‹n› is 1, 2 or 3. Point at a box in a diagram for its details.</p>
 </header>
 
 <section class="tiles" aria-label="At a glance">
@@ -333,10 +338,10 @@ terraform -chdir=plans/user_management destroy</code></pre>
 </ul>
 
 <h2 id="arch-overview">1. Where things live</h2>
-<p>Each environment has its own subscription with one resource group. The resource groups hold the same resources. Only the names and the address ranges are different. The prod subscription also holds the metastore storage and the Terraform state. Entra ID holds the groups and the app registrations. The Databricks account holds the metastore, and for each workspace its network objects.</p>
+<p>Each environment has its own subscription with one resource group. The resource groups hold the same resources. Only the names and the address ranges are different. The prod subscription also holds the Terraform state. Entra ID holds the groups and the app registrations. The Databricks account holds the metastore, and for each workspace its network objects.</p>
 <div class="card">
   <div class="scroll"><svg id="arch-overview-svg" class="dg" viewBox="0 0 1000 556" role="img" aria-label="Containment of the platform: one subscription per environment with one resource group, the Entra ID tenant, the Databricks account with the metastore, and the shared resources in the prod subscription."></svg></div>
-  <p class="figcap">One environment is drawn, and the two cards behind it are the other two. The three lines show what crosses a boundary: each workspace is assigned to the one metastore, the metastore keeps its root storage in the prod subscription, and the persona groups go from Entra ID into the Databricks account.</p>
+  <p class="figcap">One environment is drawn, and the two cards behind it are the other two. The lines show what crosses a boundary: each workspace is assigned to the one metastore, the persona groups go from Entra ID into the Databricks account, and the GitHub environments and the deploy client IDs go to px-lakehouse-data's repository.</p>
 </div>
 
 <h3>What is different per environment</h3>
@@ -409,14 +414,14 @@ terraform -chdir=plans/user_management destroy</code></pre>
     <tbody>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-user"/></svg>Admin users</td><td>Entra users, Databricks account admins</td><td><code>az login</code></td><td>Owner of the three subscriptions, which hold more than this platform. Members of the platform admins, the metastore admins and each environment admin group: every other right they have comes through these groups.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-platform-admins</code></td><td>Entra group of the admin users, members in the code (terraform_state)</td><td>–</td><td>Entra admin of the SQL servers. Reads and writes every Terraform state. Owner of each environment's resource group.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, its root credential, and each environment's storage and service credential. Manages the run-as SPs. USER on each workspace, with MANAGE on its secret scope.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, and each environment's storage and service credential. Manages the run-as SPs. USER on each workspace, with MANAGE on its secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-admins</code></td><td>Databricks account group: the admin users and the environment's deploy SP</td><td>–</td><td>USER on its own workspace. Owns what px-lakehouse-data makes. CREATE CATALOG, CONNECTION and EXTERNAL LOCATION on the metastore. CREATE EXTERNAL LOCATION on the storage credential. No ACL on the secret scope.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Engineers are also Reader on the resource group, to see its resources in the portal. Their members are set in Entra ID, not in the code. Prod has no engineers group.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-kv-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Service Principal User on the run-as SP, so it can deploy jobs that run as it.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account and adopts them, so its destroy deletes them.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Engineers are also Reader on the resource group, to see its resources in the portal. The admins are their first members, from the code; after that, members are set in Entra ID. Prod has no engineers group.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-kv-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's. The admins are their first members.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Reader on its workspace resource, so px-lakehouse-data finds the workspace URL from the resource ID. Service Principal User on the run-as SP, so it can deploy jobs that run as it. Its client ID is in the repository variable <code>DEPLOY_CLIENT_IDS</code>.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-run-sp</code></td><td>Entra app, Databricks service principal</td><td>Nobody. Jobs run as it. No secret.</td><td>Grants per schema. ACCESS on the SQL service credential. READ on the secret scope. No Azure roles.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-sql-sp</code></td><td>Entra app</td><td>Client secret, made by px-lakehouse-data's <code>scripts/sql-access.sh</code>, in the key vault</td><td>db_datareader in the SQL database, for the federation connection. Not in Databricks, no Azure roles. Whoever reads the secret scope can act as it, so it only reads.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>Access connectors</td><td>Managed identities</td><td>Unity Catalog uses them</td><td><code>‹e›-dbr-adls-connector</code>: Blob Data, Queue Data and Account Contributor on the storage account, EventGrid EventSubscription Contributor on the resource group. <code>‹e›-dbr-sqlsrv-connector</code>: db_datareader, db_datawriter, db_ddladmin (<code>scripts/sql-access.sh</code>). <code>uc-dbr-connector</code>: Blob Data and Queue Data Contributor and EventGrid on the metastore storage.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>Access connectors</td><td>Managed identities</td><td>Unity Catalog uses them</td><td><code>‹e›-dbr-adls-connector</code>: Blob Data, Queue Data and Account Contributor on the storage account, EventGrid EventSubscription Contributor on the resource group. <code>‹e›-dbr-sqlsrv-connector</code>: db_datareader, db_datawriter, db_ddladmin (<code>scripts/sql-access.sh</code>).</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-ent"/></svg>AzureDatabricks</td><td>First-party Entra app</td><td>–</td><td>Key Vault Secrets User on each key vault, for the secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-sp</code></td><td>Entra app, retired</td><td>No valid secret</td><td>Owns the system table provider in Databricks, which nobody can change. Nothing else.</td></tr>
     </tbody>
@@ -458,7 +463,6 @@ terraform -chdir=plans/user_management destroy</code></pre>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Containers <code>bronze</code>, <code>silver</code>, <code>gold</code></td><td>None</td><td>Not used by Unity Catalog. The layers are schemas in the catalog.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Foreign catalog <code>px_fed_lakehouse_sqlsrv_‹e›</code> to read. Service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>Key vault <code>px-lakehouse-‹e›-kv</code></td><td>Secret scope <code>px-lakehouse-kv</code></td><td>Secrets of the connections and jobs, such as <code>px-lakehouse-d-sql-sp-client-secret</code>.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>metastore</code> in <code>pxlakehouseucsa02</code></td><td>Metastore root</td><td>Managed data at metastore level. The catalogs keep their own storage.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-‹e›-data</code>: px-lakehouse-data, one per deploy SP.</td></tr>
     </tbody>
   </table>
@@ -489,19 +493,18 @@ terraform -chdir=plans/user_management destroy</code></pre>
       <tr><th colspan="3">plans/dev, test, prod · in the Databricks account</th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pl"/></svg>px-lakehouse-‹e›-ncc</td><td>Network connectivity config</td><td>Five private endpoint rules: storage blob, dfs and queue, key vault, SQL server.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>px-lakehouse-‹e›-network-policy</td><td>Network policy</td><td>Ingress: two IP addresses, and the deploy SP by identity. Egress: not restricted.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The admin group gets its metastore grant.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The persona groups, resolved into the account, are imported into the plan, so its destroy deletes them. The deploy SP is Reader on the workspace resource. The admin group gets its metastore grant.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-kv</td><td>Secret scope</td><td>A Databricks object, one per workspace, with the same name in each. On the environment's key vault. READ for the run-as SP (and in dev the engineers), MANAGE for the metastore admins. The plan takes away the MANAGE that Databricks gives the creator.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_lakehouse_‹e›</code>.</td></tr>
-      <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouseucsa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Container metastore. Firewall: default deny, open to the root credential's access connector, trusted Azure services and the admins' two addresses.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-mi"/></svg>px-lakehouse-uc-dbr-connector</td><td>Access connector</td><td>The metastore's root credential, made through the account API.</td></tr>
+      <tr><th colspan="3">plans/unity_catalog_metastore · in the Databricks account</th></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. No metastore-level storage: each catalog has its own storage root. <code>force_destroy</code>, so its destroy takes whatever it still holds.</td></tr>
       <tr><th colspan="3">plans/terraform_state · prod subscription, resource group <code>px-lakehouse-tfstate-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehousetfstatesa</td><td>Storage account</td><td>Entra ID only (no shared keys), TLS 1.2, versioning. Deleted blobs and containers kept 30 days. <code>prevent_destroy</code>. Four containers, one per writer.</td></tr>
       <tr><th colspan="3">plans/user_management · Entra ID and the Databricks account</th></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg>App registrations</td><td>Entra apps and service principals</td><td>Per environment: deploy SP (with GitHub federated credentials and its state role), run-as SP, SQL SP. Also <code>px-lakehouse-sp</code>, retired.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Entra groups</td><td>Security groups</td><td>Per environment: engineers (not in prod), readers, support and kv-managers. Members are not in the code.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg>App registrations</td><td>Entra apps and service principals</td><td>Per environment: deploy SP (with GitHub federated credentials and its state role), run-as SP, SQL SP.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Entra groups</td><td>Security groups</td><td>Per environment: engineers (not in prod), readers, support and kv-managers. The admins are their first members; later members are set in Entra ID.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Account groups</td><td>Databricks groups</td><td><code>px-lakehouse-‹e›-admins</code> and <code>px-lakehouse-metastore-admins</code>, with their members.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg>GitHub, px-lakehouse-data</td><td>Environments, repository variable</td><td>Environments dev, test and prod, deployable from <code>main</code> only. Variable <code>DEPLOY_CLIENT_IDS</code>: the deploy SPs' client IDs, which the workflow logs in with. Needs <code>GITHUB_TOKEN</code>.</td></tr>
     </tbody>
   </table>
 </div>
@@ -509,7 +512,7 @@ terraform -chdir=plans/user_management destroy</code></pre>
 <h2 id="arch-gaps">6. Points to know</h2>
 <div class="card">
   <ul class="plain">
-    <li>The environment storage accounts, the key vaults and the metastore's storage account deny traffic by default (section 2), but keep their public endpoints: there is no VPN, so the admins come in by address. The state account accepts any network, as GitHub's runners have no fixed address; it takes Entra ID logins only. Shared keys are on for the other storage accounts.</li>
+    <li>The environment storage accounts and the key vaults deny traffic by default (section 2), but keep their public endpoints: there is no VPN, so the admins come in by address. The state account accepts any network, as GitHub's runners have no fixed address; it takes Entra ID logins only. Shared keys are on for the other storage accounts.</li>
     <li>The admins' two addresses are in the code (<code>allowed_ip_addresses</code>). From another address, Terraform can't read the storage accounts or key vaults: add it there first.</li>
     <li>Traffic out is open: from classic clusters through the NAT gateway, and from serverless (FULL_ACCESS).</li>
     <li>The route table has no routes.</li>
@@ -518,8 +521,8 @@ terraform -chdir=plans/user_management destroy</code></pre>
     <li>Prod is as resilient as dev and test, to keep it cheap: storage LRS, the SQL database's default backups (locally redundant, no long-term retention), no SQL auditing or Defender, no purge protection.</li>
     <li>Customer-managed keys are enabled on the workspaces, but no key is set.</li>
     <li>The containers bronze, silver and gold are not used by Unity Catalog.</li>
-    <li>The members of the persona and key vault manager groups are not in the code. Write them down before a tear down.</li>
-    <li>The metastore has metastore-level storage. With it, Databricks makes a catalog <code>main</code>, open to every workspace, and the external location <code>metastore_root_location</code>, both owned by whoever made the metastore. A metastore without that storage would make neither: the catalogs have their own.</li>
+    <li>Only the first members of the persona and key vault manager groups are in the code (the admins). Write down the others before a tear down.</li>
+    <li>The metastore has no metastore-level storage, since 2026-11-01. A catalog made without a storage root fails; the catalogs here all have one. Without it, Databricks makes no catalog <code>main</code> and no external location <code>metastore_root_location</code>, which needed steps by hand before.</li>
   </ul>
 </div>
 
@@ -532,50 +535,49 @@ terraform -chdir=plans/user_management destroy</code></pre>
 // ---------------------------------------------------------------------------
 // Data. Status: "done", "todo" or "waiting".
 // ---------------------------------------------------------------------------
-const AS_OF = "2026-10-31 19:20 UTC";
-const STATUS_TEXT = "Built. Every plan shows no changes, px-lakehouse-data's three environments included, and the steps by hand are done. Step 4 also makes the secret scope and sets the default catalog since px-lakehouse-infra #30. Step 5 has its own guide in px-lakehouse-data";
+const AS_OF = "2026-11-01 11:15 UTC";
+const STATUS_TEXT = "Rebuilt from zero on 2026-11-01 with Terraform only. Every plan shows no changes, px-lakehouse-data's three environments included, and the federation answers in each. Step 5 has its own guide in px-lakehouse-data";
 
 const STEPS = [
   {
     n: 1, name: "State storage", plan: "plans/terraform_state", status: "done",
     goal: "Make the storage account that holds the state of all plans, its own state included, and the platform admin group, which every later plan uses.",
     do: [
-      "The first time, when the account does not exist yet, run the script. It applies on local state, then moves the state into the account. In between it logs you in again: you reach the account through the platform admin group it just made, which a token from before lacks:<pre><code>plans/terraform_state/bootstrap.sh</code></pre>",
+      "The first time, when the account does not exist yet, run the script. It applies on local state, then moves the state into the account. In between it logs you in again: you reach the account through the platform admin group it just made, which a token from before lacks (a 403 on the move):<pre><code>plans/terraform_state/bootstrap.sh</code></pre>",
       "After that, plan and apply this plan as any other.",
     ],
     check: "<code>terraform plan</code> shows no changes.",
   },
   {
     n: 2, name: "Identities", plan: "plans/user_management", status: "done",
-    goal: "Make the Entra groups, the app registrations, the service principals and the Databricks groups.",
-    do: ["Run <code>terraform apply</code>."],
-    check: "<code>terraform plan</code> shows no changes.",
-    why: "This plan needs no workspace. Each environment assigns its own identities to its workspace in step 4.",
+    goal: "Make the Entra groups, with the admins as their first members, the app registrations, the service principals and the Databricks groups. Make px-lakehouse-data's GitHub environments and its variable <code>DEPLOY_CLIENT_IDS</code>.",
+    do: ["Set <code>GITHUB_TOKEN</code>, then run <code>terraform apply</code>."],
+    check: "<code>terraform plan</code> shows no changes. The repository has the environments dev, test and prod, each deployable from <code>main</code>, and the variable with three client IDs.",
+    why: "This plan needs no workspace. Each environment assigns its own identities to its workspace in step 4. The persona groups' copies in the Databricks account are made there too: with automatic identity management on, Databricks refuses to create them here.",
   },
   {
     n: 3, name: "Metastore", plan: "plans/unity_catalog_metastore", status: "done",
-    goal: "Make the metastore, its storage account, its access connector and its root credential.",
+    goal: "Make the metastore, owned by the metastore admins, without storage of its own.",
     do: ["Run <code>terraform apply</code>."],
-    check: "<code>terraform plan</code> shows no changes. The account shows the metastore with root credential <code>px-lakehouse-uc-dbr-connector</code>.",
-    why: "The root credential uses the account API, so this plan needs no workspace.",
+    check: "<code>terraform plan</code> shows no changes.",
+    why: "Every catalog has its own storage root, so the metastore needs none. Without it, Databricks makes no catalog <code>main</code> and no <code>metastore_root_location</code>, and the metastore has no root credential that would keep Terraform from destroying it.",
   },
   {
     n: 4, name: "Environments", plan: "plans/dev, test, prod", status: "done",
     goal: "Make the workspace, network, storage, SQL, key vault, Data Factory and NCC. Approve the serverless private endpoints. Assign the identities and give their entitlements. Grant the admin group on the metastore. Make the credentials and the secret scope. Set the default catalog.",
-    do: ["Run <code>terraform apply</code> for each environment. The three can run in parallel. Each takes about 8 minutes."],
-    check: "<code>terraform plan</code> shows no changes. The apply prints <em>Approved</em> for each of the five private endpoints.",
-    why: "The plan finds the metastore, the admin group and the service principals by name. It resolves each persona group into the Databricks account when it reads it. It makes the secret scope as you: Databricks writes to the key vault as the scope's creator, and px-lakehouse-data's deploy identity has no role on it. Then it gives MANAGE to the metastore admins and deletes yours, with the Databricks CLI.",
+    do: ["Run <code>terraform apply</code> for each environment, about 8 minutes each. To run them in parallel, start them a minute apart: three providers starting at once failed with <em>Plugin did not respond</em>."],
+    check: "<code>terraform plan</code> shows no changes. The apply prints <em>Approved</em> for each of the five private endpoints. The first plan shows the persona groups as imported.",
+    why: "The plan finds the metastore, the admin group and the service principals by name. It resolves each persona group into the Databricks account and imports it, so its destroy deletes it. It gives the deploy SP Reader on the workspace resource, so px-lakehouse-data can name the workspace by resource ID. It makes the secret scope as you: Databricks writes to the key vault as the scope's creator, and px-lakehouse-data's deploy identity has no role on it. Then it gives MANAGE to the metastore admins and deletes yours, with the Databricks CLI.",
   },
   {
     n: 5, name: "Data objects", plan: "px-lakehouse-data: unity_catalog", status: "done",
     goal: "Make the external locations, catalogs, schemas, volumes and the federation. px-lakehouse-data's docs/build-guide.html has the steps.",
     do: [
-      "After a rebuild, put the new IDs in <code>infra/envs/*</code> (workspace host and ID, metastore ID, run-as IDs) and in <code>DEPLOY_CLIENT_IDS</code> of the workflow. Section 8 has them.",
       "Run <code>scripts/sql-access.sh &lt;env&gt;</code> for the environment: the connection in its tfvars must exist before its apply.",
       "Run the workflow once per environment: Actions &gt; databricks-infra &gt; Run workflow.",
     ],
-    check: "Each run applies 19 objects (dev: 24, with its connection). The next plan shows no changes.",
-    why: "The data repository keeps its IDs as values, for its CI. Its deploy identity makes everything there; test was torn down and built from zero that way, twice.",
+    check: "Each run imports the connection and creates 23 objects (prod: 22). The next plan shows no changes.",
+    why: "No IDs to copy after a rebuild: px-lakehouse-data names the workspace by its Azure resource ID and the service principals by display name, and its deploy identity looks up the rest.",
   },
 ];
 
@@ -593,29 +595,33 @@ const COMPARE = {
   ],
 };
 
-// Timeline of the rebuild with the old plans: clock times on 2026-10-31
+// Timeline of the teardown and rebuild of 2026-11-01: clock times, UTC
 const TIMELINE = [
-  { label: "1 State storage", start: "11:55:50", end: "11:58:30" },
-  { label: "2 Identities, pass 1", start: "11:59:00", end: "12:02:59" },
-  { label: "3 Metastore, pass 1", start: "12:03:20", end: "12:05:44" },
-  { label: "4 Environments · dev", start: "12:08:30", end: "12:15:42" },
-  { label: "4 Environments · test", start: "12:08:30", end: "12:15:45" },
-  { label: "4 Environments · prod", start: "12:08:30", end: "12:15:54" },
-  { label: "4 Endpoint approval", start: "12:16:30", end: "12:18:30" },
-  { label: "5 Identities, pass 2", start: "12:23:19", end: "12:23:36" },
-  { label: "6 Environments, pass 2", start: "12:23:40", end: "12:24:01" },
-  { label: "7 Metastore, pass 2", start: "12:24:20", end: "12:25:10" },
-  { label: "8 Data objects", start: "12:26:20", end: "12:28:27" },
+  { label: "Tear down data objects ×3", start: "09:32:56", end: "09:36:13" },
+  { label: "Tear down environments ×3", start: "09:36:28", end: "09:48:18" },
+  { label: "dev NCC, once let go", start: "09:53:21", end: "09:54:17" },
+  { label: "Tear down metastore", start: "09:54:30", end: "10:17:35" },
+  { label: "Tear down identities", start: "10:19:30", end: "10:20:14" },
+  { label: "Clean up, one time", start: "10:20:40", end: "10:21:23" },
+  { label: "Tear down state storage", start: "10:22:30", end: "10:23:48" },
+  { label: "1 State storage", start: "10:27:40", end: "10:50:46" },
+  { label: "2 Identities", start: "10:51:58", end: "10:54:09" },
+  { label: "3 Metastore", start: "10:54:40", end: "10:54:56" },
+  { label: "4 Environments · dev", start: "10:56:00", end: "11:03:55" },
+  { label: "4 Environments · test", start: "10:56:45", end: "11:04:33" },
+  { label: "4 Environments · prod", start: "10:57:30", end: "11:05:14" },
+  { label: "5 SQL script ×3", start: "11:06:41", end: "11:08:24" },
+  { label: "5 Data objects ×3 (CI)", start: "11:08:45", end: "11:14:30" },
 ];
 
 // Resources each plan manages today, from its state
 const PLANS = [
   { label: "1 State storage", value: 8, detail: "resource group, account, 4 containers, platform admin group and its role" },
-  { label: "2 Identities", value: 61, detail: "Entra apps, service principals and groups; Databricks groups and service principals" },
-  { label: "3 Metastore", value: 10, detail: "metastore, storage, access connector, root credential" },
-  { label: "4 Environment · dev", value: 85, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access" },
-  { label: "4 Environment · test", value: 83, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
-  { label: "4 Environment · prod", value: 80, detail: "as test, without the engineers group" },
+  { label: "2 Identities", value: 66, detail: "Entra apps, service principals and groups; Databricks groups and service principals; GitHub environments and variable" },
+  { label: "3 Metastore", value: 1, detail: "the metastore, without storage of its own" },
+  { label: "4 Environment · dev", value: 89, detail: "workspace, network, storage, SQL, key vault and secret scope, Data Factory, NCC, access, 3 persona groups" },
+  { label: "4 Environment · test", value: 87, detail: "as dev, without the engineers' SQL writer grant and secret scope ACL" },
+  { label: "4 Environment · prod", value: 83, detail: "as test, without the engineers group" },
   { label: "5 Data objects", value: 71, detail: "px-lakehouse-data: dev and test 24 each, prod 23, with their SQL connection" },
 ];
 
@@ -632,26 +638,24 @@ const PROOF = [
 
 // [what, who, status]
 const HAND = [
-  ["Add the members to the Entra groups again: the key vault managers of each environment, and dev's engineers. Readers and support stay empty for now.", "You", "Done"],
-  ["Run px-lakehouse-data's <code>scripts/sql-access.sh &lt;env&gt;</code> for each environment. It adds the SQL access connector to the database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and the SQL identity (<code>db_datareader</code>), its client secret in the key vault, and the connection. It opens the SQL server to your address for the run only.", "You", "Done"],
-  ["Give <code>metastore_root_location</code>, which Databricks makes with the metastore's root credential, to <code>px-lakehouse-metastore-admins</code>.", "You", "Done"],
-  ["Drop the catalog <code>main</code>, which Databricks makes with the metastore, open to every workspace.", "Claude", "Done"],
+  ["Log in again during step 1 (<code>bootstrap.sh</code> does it): a token from before the platform admin group can't reach the state account.", "You", "Done"],
+  ["Run px-lakehouse-data's <code>scripts/sql-access.sh &lt;env&gt;</code> for each environment. It adds the SQL access connector to the database (<code>db_datareader</code>, <code>db_datawriter</code>, <code>db_ddladmin</code>), and the SQL identity (<code>db_datareader</code>), its client secret in the key vault, and the connection. It opens the SQL server to your address for the run only.", "Claude", "Done"],
 ];
 
 const IDS = [
-  ["Metastore", "px-lakehouse-uc-dbr-metastore", "c4ffc048-f9f8-4401-a393-238a3c29fae0"],
-  ["Workspace · dev", "adb-7405619574554186.6.azuredatabricks.net", "7405619574554186"],
-  ["Workspace · test", "adb-7405605769926036.16.azuredatabricks.net", "7405605769926036"],
-  ["Workspace · prod", "adb-7405604947705518.18.azuredatabricks.net", "7405604947705518"],
-  ["Deploy SP · dev", "px-lakehouse-d-deploy-sp", "d7b2e252-94e8-4f6d-b293-fb5b6ab668eb"],
-  ["Deploy SP · test", "px-lakehouse-t-deploy-sp", "503722c9-9cad-41b0-81ba-f55979f54086"],
-  ["Deploy SP · prod", "px-lakehouse-p-deploy-sp", "368b1172-6bf8-4d1f-9bd9-f3be5405d726"],
-  ["Run-as SP · dev", "px-lakehouse-d-run-sp", "8d16ee44-ac46-45b2-820c-0079e4753526"],
-  ["Run-as SP · test", "px-lakehouse-t-run-sp", "59397832-0061-49d0-af97-e5c1f170ba54"],
-  ["Run-as SP · prod", "px-lakehouse-p-run-sp", "d031e747-4220-49d5-9b9d-2949fbf5c7f6"],
-  ["SQL SP · dev", "px-lakehouse-d-sql-sp", "7cedaa1a-db93-450d-a883-e4dfad41307c"],
-  ["SQL SP · test", "px-lakehouse-t-sql-sp", "93997037-931a-463b-9ff2-7d387d65d0f8"],
-  ["SQL SP · prod", "px-lakehouse-p-sql-sp", "0bf73afa-d161-47de-b2f3-820eb2971a1d"],
+  ["Metastore", "px-lakehouse-uc-dbr-metastore", "96178195-42ff-4612-b5bc-5653ad0efd81"],
+  ["Workspace · dev", "adb-7405609260874804.4.azuredatabricks.net", "7405609260874804"],
+  ["Workspace · test", "adb-7405616092464966.6.azuredatabricks.net", "7405616092464966"],
+  ["Workspace · prod", "adb-7405609918931095.15.azuredatabricks.net", "7405609918931095"],
+  ["Deploy SP · dev", "px-lakehouse-d-deploy-sp", "666166ba-d43f-4885-9bcb-f2e6f159c360"],
+  ["Deploy SP · test", "px-lakehouse-t-deploy-sp", "c1469253-5a82-43e2-b8a2-f4401335469a"],
+  ["Deploy SP · prod", "px-lakehouse-p-deploy-sp", "d49b7850-6273-4724-933b-6d9c751146b3"],
+  ["Run-as SP · dev", "px-lakehouse-d-run-sp", "f6b80981-6c57-42fd-ab74-66b46d78feee"],
+  ["Run-as SP · test", "px-lakehouse-t-run-sp", "e15b27c4-fbfc-4761-ad81-237a23c26cbb"],
+  ["Run-as SP · prod", "px-lakehouse-p-run-sp", "8bde956e-0f16-4255-8419-4cba63e556ea"],
+  ["SQL SP · dev", "px-lakehouse-d-sql-sp", "3526b55b-e7b1-4598-8517-cd9f9f89522b"],
+  ["SQL SP · test", "px-lakehouse-t-sql-sp", "07e4db31-b7a7-44c7-a3dc-7e8b7105f870"],
+  ["SQL SP · prod", "px-lakehouse-p-sql-sp", "3d131663-2689-4e4b-bfd2-9e14d1c0a6f0"],
 ];
 
 // ---------------------------------------------------------------------------
@@ -700,9 +704,9 @@ function renderHeader() {
   const span = (r) => minutes(secs(r.end) - secs(r.start));
   const tiles = [
     ["Applies for a build", "6", "one per plan, was 12"],
-    ["Steps between applies", "0", "code edits or manual, was 9"],
-    ["One environment, build", span(PROOF.find((r) => r.key === "build")), "one apply (throwaway environment x)"],
-    ["One environment, tear down", span(PROOF.find((r) => r.key === "teardown")), "one command (throwaway environment x)"],
+    ["Steps by hand", String(HAND.length), "a login, and the SQL script per environment"],
+    ["Full teardown", span({ start: TIMELINE[0].start, end: TIMELINE[6].end }), "2026-11-01, state account included"],
+    ["Full rebuild", span({ start: TIMELINE[7].start, end: TIMELINE[TIMELINE.length - 1].end }), "2026-11-01, Terraform only"],
   ];
   document.getElementById("tiles").innerHTML = tiles.map(([l, v, s]) =>
     `<div class="card tile"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join("");
@@ -711,7 +715,7 @@ function renderHeader() {
 function renderFlow() {
   const svg = document.getElementById("flow");
   const lanes = ["State", "Identities", "Metastore", "Environments", "Data objects"];
-  const edges = ["state account", "admin groups", "metastore, identities", "workspace IDs (tfvars)"];
+  const edges = ["state account", "admin groups", "metastore, identities", "names, no IDs"];
   const x0 = 130, dx = 180, w = 120, h = 44, laneH = 62, y0 = 18;
   const cx = (n) => x0 + (n - 1) * dx;
   const cy = (n) => y0 + (n - 1) * laneH + (laneH - h) / 2;
@@ -868,7 +872,7 @@ function renderAll() {
   ["plans", "compare", "proof", "gantt"].forEach((id) => { document.getElementById(id).innerHTML = ""; });
   renderHeader(); renderFlow(); renderPlans(); renderCompare(); renderSteps(); renderTables();
   renderGantt("proof", "proof-table", PROOF, "--series-1", 300);
-  renderGantt("gantt", "gantt-table", TIMELINE, "--series-2", 300);
+  renderGantt("gantt", "gantt-table", TIMELINE, "--series-2", 900);
 }
 renderAll();
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
@@ -978,9 +982,9 @@ const OVERVIEW = (() => {
       { x: 30, y: 484, w: 512, h: 48, kind: "rg", icon: "az-rg", label: "px-lakehouse-‹e›-dbr-managed-rg", sub: "Databricks makes and locks it" },
       { x: 612, y: 40, w: 372, h: 136, kind: "sub", icon: "az-group", label: "Entra ID tenant", sub: "plans/user_management" },
       { x: 612, y: 196, w: 372, h: 128, kind: "dbx", icon: "az-dbr", label: "Databricks account" },
-      { x: 612, y: 344, w: 372, h: 204, kind: "sub", icon: "az-sub", label: "Prod subscription", sub: "and the shared parts" },
-      { x: 622, y: 390, w: 352, h: 72, kind: "rg", icon: "az-rg", label: "px-lakehouse-uc-rg" },
-      { x: 622, y: 470, w: 352, h: 70, kind: "rg", icon: "az-rg", label: "px-lakehouse-tfstate-rg" },
+      { x: 612, y: 344, w: 372, h: 122, kind: "sub", icon: "az-sub", label: "Prod subscription", sub: "and the shared state" },
+      { x: 622, y: 390, w: 352, h: 70, kind: "rg", icon: "az-rg", label: "px-lakehouse-tfstate-rg" },
+      { x: 612, y: 476, w: 372, h: 70, kind: "sub", icon: "az-app", label: "GitHub: px-lakehouse-data", sub: "plans/user_management" },
     ],
     notes: [
       { x: 44, y: 146, text: "NETWORK", cls: "colhead" },
@@ -989,7 +993,6 @@ const OVERVIEW = (() => {
     ],
     edges: [
       { p: [[532, 173], [590, 173], [590, 295], [622, 295]], label: "assigned", at: [590, 239] },
-      { p: [[786, 314], [786, 420]], label: "root storage", at: [786, 337] },
       { p: [[786, 168], [786, 230]], label: "resolved", at: [786, 189] },
     ],
     nodes: [
@@ -1009,18 +1012,18 @@ const OVERVIEW = (() => {
       card(376, row(1), "az-mi", "Access connector", "for the lake (adls)", ["px-lakehouse-‹e›-dbr-adls-connector", "Managed identity behind the storage credential with the same name."]),
       card(376, row(2), "az-mi", "Access connector", "for SQL (sqlsrv)", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Managed identity behind the service credential with the same name. Writes to the SQL database."]),
       card(376, 489, "az-sa", "DBFS storage", "pxlakehouse‹e›dbfs", ["pxlakehouse‹e›dbfs", "The workspace's root storage. Databricks manages it."]),
-      card(622, 86, "az-app", "App registrations", "deploy, run-as, SQL ×3", ["App registrations", "Per environment: deploy SP, run-as SP and SQL SP. Also px-lakehouse-sp, retired."], 170),
+      card(622, 86, "az-app", "App registrations", "deploy, run-as, SQL ×3", ["App registrations", "Per environment: deploy SP, run-as SP and SQL SP."], 170),
       card(802, 86, "az-user", "Admin user", "Owner of 3 subscriptions", ["Admin user", "Owner of the 3 subscriptions, Databricks account admin. Its other rights come through groups: the platform admins are Entra admin of the SQL servers."], 170),
-      card(622, 130, "az-group", "Groups", "personas ×8, KV mgrs ×3", ["Entra groups", "px-lakehouse-‹e›-engineers (not prod), -readers, -support (8)<br>px-lakehouse-‹e›-kv-managers (3)<br>px-lakehouse-platform-admins (1, from terraform_state)<br>Members are set in Entra ID, not in the code, except the platform admins'."], 170),
+      card(622, 130, "az-group", "Groups", "personas ×8, KV mgrs ×3", ["Entra groups", "px-lakehouse-‹e›-engineers (not prod), -readers, -support (8)<br>px-lakehouse-‹e›-kv-managers (3)<br>px-lakehouse-platform-admins (1, from terraform_state)<br>The admins are the first members; later members are set in Entra ID."], 170),
       card(802, 130, "az-ent", "AzureDatabricks", "reads the key vaults", ["AzureDatabricks", "First-party app. Key Vault Secrets User on each key vault, for the secret scope."], 170),
-      card(622, 230, "az-group", "Account groups", "Entra personas, admins", ["Account groups", "px-lakehouse-‹e›-admins: admin users and the deploy SP.<br>px-lakehouse-metastore-admins: people only.<br>The persona groups, resolved from Entra ID by the environment plans."], 170),
+      card(622, 230, "az-group", "Account groups", "Entra personas, admins", ["Account groups", "px-lakehouse-‹e›-admins: admin users and the deploy SP.<br>px-lakehouse-metastore-admins: people only.<br>The persona groups, resolved from Entra ID and adopted by the environment plans, so their destroy deletes them."], 170),
       card(802, 230, "az-app", "Service principals", "deploy, run-as ×3", ["Service principals", "px-lakehouse-‹e›-deploy-sp and px-lakehouse-‹e›-run-sp, registered from Entra ID."], 170),
-      card(622, 276, "az-dbr", "UC metastore", "serves all 3 workspaces", ["px-lakehouse-uc-dbr-metastore", "westeurope, one per region. Owner: px-lakehouse-metastore-admins."], 170),
+      card(622, 276, "az-dbr", "UC metastore", "serves all 3 workspaces", ["px-lakehouse-uc-dbr-metastore", "westeurope, one per region. Owner: px-lakehouse-metastore-admins. No storage of its own."], 170),
       card(802, 276, "az-pl", "NCC, network policy", "one each per workspace", ["Per workspace", "px-lakehouse-‹e›-ncc: five private endpoint rules for serverless.<br>px-lakehouse-‹e›-network-policy: who may reach the front end."], 170),
-      card(632, 420, "az-sa", "Metastore storage", "pxlakehouseucsa02", ["pxlakehouseucsa02", "Container metastore: the metastore root."], 164),
-      card(804, 420, "az-mi", "Access connector", "metastore root", ["px-lakehouse-uc-dbr-connector", "The metastore's root credential."], 160),
-      card(632, 497, "az-sa", "State storage", "Entra only, versioned", ["pxlakehousetfstatesa", "Entra ID only, no shared keys. Versioning on. Deleted blobs and containers kept 30 days."], 164),
-      card(804, 497, "az-sa", "4 containers", "infra, data ×3", ["State containers", "px-lakehouse-infra: every plan here.<br>px-lakehouse-data, -data-t, -data-p: one per deploy SP."], 160),
+      card(632, 416, "az-sa", "State storage", "Entra only, versioned", ["pxlakehousetfstatesa", "Entra ID only, no shared keys. Versioning on. Deleted blobs and containers kept 30 days."], 164),
+      card(804, 416, "az-sa", "4 containers", "infra, data ×3", ["State containers", "px-lakehouse-infra: every plan here.<br>px-lakehouse-‹e›-data: px-lakehouse-data, one per deploy SP."], 160),
+      card(632, 500, "x-shield", "Environments", "dev, test, prod: main only", ["GitHub environments", "dev, test and prod, deployable from main only. The deploy SPs' federated credentials trust them."], 164),
+      card(804, 500, "az-app", "Variable", "DEPLOY_CLIENT_IDS", ["DEPLOY_CLIENT_IDS", "The deploy SPs' client IDs, by environment. The workflow logs in with them; a rebuild updates them."], 160),
     ],
   };
 })();

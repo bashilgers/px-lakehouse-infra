@@ -22,3 +22,8 @@ output "sqlsrv_connector_principal_id" {
   value       = azurerm_databricks_access_connector.px_sql_connector.identity[0].principal_id
   description = "Object ID of the dbr-sqlsrv-connector's managed identity, for its user in the database"
 }
+
+output "persona_group_ids" {
+  value       = { for persona, group in data.databricks_account_iam_external_group_v2.px_persona : persona => group.internal_id }
+  description = "The persona groups resolved into the Databricks account, by persona: the import IDs of databricks_group.px_persona"
+}
