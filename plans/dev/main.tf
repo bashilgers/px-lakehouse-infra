@@ -17,7 +17,7 @@ module "lakehouse" {
   azure_databricks_object_id               = "78477c4b-9331-4168-8644-5d13b5e5a7de"
   admins_group_name                        = "px-lakehouse-d-admins"
   metastore_admins_group_name              = "px-lakehouse-metastore-admins"
-  default_catalog_name                     = "px_ucc_phoenix_d"
+  default_catalog_name                     = "px_ucc_lakehouse_d"
   allowed_ip_addresses                     = ["83.84.179.42/32", "91.201.164.7/32"]
   sql_writers = [
     "px-lakehouse-d-engineers", # dev only: bundles in development mode run as the developer

@@ -352,7 +352,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td>Criticality tag</td><td>4-not-critical</td><td>4-not-critical</td><td>1-critical</td></tr>
       <tr><td>Deploy SP trusts</td><td>main, GitHub environment dev, pull requests</td><td>main, GitHub environment test</td><td>main, GitHub environment prod</td></tr>
       <tr><td>Engineers</td><td>Also make their own schemas, read the secret scope, and write to SQL through the service credential</td><td>Read only</td><td>None: prod has no engineers group</td></tr>
-      <tr><td>Foreign catalog</td><td><code>px_fed_phoenix_sqlsrv_d</code></td><td><code>px_fed_phoenix_sqlsrv_t</code></td><td><code>px_fed_phoenix_sqlsrv_p</code></td></tr>
+      <tr><td>Foreign catalog</td><td><code>px_fed_lakehouse_sqlsrv_d</code></td><td><code>px_fed_lakehouse_sqlsrv_t</code></td><td><code>px_fed_lakehouse_sqlsrv_p</code></td></tr>
     </tbody>
   </table>
 </div>
@@ -455,10 +455,10 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <table>
     <thead><tr><th>Where</th><th>Unity Catalog object</th><th>Holds</th></tr></thead>
     <tbody>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>landing</code></td><td>External location <code>px_lakehouse_exloc_landing_‹e›</code>, file events on</td><td>Raw files. One volume per source folder, in schema bronze (now <code>ns_api</code>).</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>catalog</code></td><td>External location <code>px_lakehouse_exloc_catalog_‹e›</code>, managed storage of catalog <code>px_ucc_phoenix_‹e›</code></td><td>Every table. Schemas audit, metadata, bronze, silver and gold.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>landing</code></td><td>External location <code>px_lakehouse_‹e›_exloc_landing</code>, file events on</td><td>Raw files. One volume per source folder, in schema bronze (now <code>ns_api</code>).</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>catalog</code></td><td>External location <code>px_lakehouse_‹e›_exloc_catalog</code>, managed storage of catalog <code>px_ucc_lakehouse_‹e›</code></td><td>Every table. Schemas audit, metadata, bronze, silver and gold.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Containers <code>bronze</code>, <code>silver</code>, <code>gold</code></td><td>None</td><td>Not used by Unity Catalog. The layers are schemas in the catalog.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Foreign catalog <code>px_fed_phoenix_sqlsrv_‹e›</code> to read. Service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Foreign catalog <code>px_fed_lakehouse_sqlsrv_‹e›</code> to read. Service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>Key vault <code>px-lakehouse-‹e›-kv</code></td><td>Secret scope <code>px-lakehouse-keyvault</code></td><td>Secrets of the connections and jobs, such as <code>px-lakehouse-d-sql-sp-client-secret</code>.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>metastore</code> in <code>pxlakehouseucsa02</code></td><td>Metastore root</td><td>Managed data at metastore level. The catalogs keep their own storage.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-data</code>, <code>-data-t</code>, <code>-data-p</code>: one per deploy SP.</td></tr>
@@ -493,7 +493,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>px-lakehouse-‹e›-network-policy</td><td>Network policy</td><td>Ingress: two IP addresses, and the deploy SP by identity. Egress: not restricted.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The admin group gets its metastore grant.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-keyvault</td><td>Secret scope</td><td>On the key vault. READ for the run-as SP (and in dev the engineers), MANAGE for the metastore admins. The plan takes away the MANAGE that Databricks gives the creator.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_phoenix_‹e›</code>.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_lakehouse_‹e›</code>.</td></tr>
       <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehouseucsa02</td><td>Storage account</td><td>ADLS Gen2, Standard LRS. Container metastore. Firewall: default deny, open to the root credential's access connector, trusted Azure services and the admins' two addresses.</td></tr>
@@ -1109,8 +1109,8 @@ const ACCESS = (() => {
     ],
     nodes: [
       card(c1, 48, "az-group", "Persona groups", "and the run-as SP", ["Lake data", "Engineers, readers and support, and the jobs. Their grants are in px-lakehouse-data, per catalog, schema and volume."]),
-      card(c2, 48, "az-dbr", "Catalog, schemas", "px_ucc_phoenix_‹e›", ["px_ucc_phoenix_‹e›", "Isolated, bound to the environment's workspace. Schemas audit, metadata, bronze, silver, gold. Volumes on landing."]),
-      card(c3, 48, "az-dbr", "External locations", "landing, catalog", ["External locations", "px_lakehouse_exloc_landing_‹e› and px_lakehouse_exloc_catalog_‹e›, on the storage credential px-lakehouse-‹e›-dbr-adls-connector."]),
+      card(c2, 48, "az-dbr", "Catalog, schemas", "px_ucc_lakehouse_‹e›", ["px_ucc_lakehouse_‹e›", "Isolated, bound to the environment's workspace. Schemas audit, metadata, bronze, silver, gold. Volumes on landing."]),
+      card(c3, 48, "az-dbr", "External locations", "landing, catalog", ["External locations", "px_lakehouse_‹e›_exloc_landing and px_lakehouse_‹e›_exloc_catalog, on the storage credential px-lakehouse-‹e›-dbr-adls-connector."]),
       card(c4, 48, "az-mi", "adls connector", "managed identity", ["px-lakehouse-‹e›-dbr-adls-connector", "Also Storage Queue Data Contributor and Storage Account Contributor on the account, and EventGrid EventSubscription Contributor on the resource group, for file events."]),
       card(c5, 48, "az-sa", "Storage account", "pxlakehouse‹e›sa02", ["pxlakehouse‹e›sa02", "Nobody else holds a data role on it."], 144),
       card(c1, 128, "az-app", "Run-as SP", "jobs run as it", ["px-lakehouse-‹e›-run-sp", "In dev, the engineers also have ACCESS: bundles in development mode run as the developer."]),
@@ -1118,7 +1118,7 @@ const ACCESS = (() => {
       card(c4, 128, "az-mi", "sqlsrv connector", "managed identity", ["px-lakehouse-‹e›-dbr-sqlsrv-connector", "Its user in the database and the roles db_datareader, db_datawriter, db_ddladmin are made by px-lakehouse-data's scripts/sql-access.sh. Serverless jobs write through mssql-python with its token."]),
       card(c5, 128, "az-sqldb", "SQL database", "Entra logins only", ["px-lakehouse-‹e›-sqldb", "Two identities reach it: the sqlsrv connector to write, the SQL SP to read."], 144, 114),
       card(c1, 198, "az-group", "Engineers", "and the run-as SP", ["Federation", "Each environment reads its own database. Readers do not see the foreign catalog."]),
-      card(c2, 198, "az-dbr", "Foreign catalog", "read-only", ["px_fed_phoenix_sqlsrv_‹e›", "On the connection px-lakehouse-‹e›-sqlsrv, database px-lakehouse-‹e›-sqldb."]),
+      card(c2, 198, "az-dbr", "Foreign catalog", "read-only", ["px_fed_lakehouse_sqlsrv_‹e›", "On the connection px-lakehouse-‹e›-sqlsrv, database px-lakehouse-‹e›-sqldb."]),
       card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-‹e›-sqlsrv", "Made by px-lakehouse-data's scripts/sql-access.sh with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
       card(c4, 198, "az-app", "SQL SP", "client secret", ["px-lakehouse-‹e›-sql-sp", "Only db_datareader: whoever reads the secret scope can act as it."]),
       card(c1, 278, "az-group", "Run-as SP, admins", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. In dev, engineers: READ. Metastore admins: MANAGE. The creator's own MANAGE is deleted."]),
