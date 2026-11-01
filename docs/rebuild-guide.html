@@ -492,7 +492,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pl"/></svg>px-lakehouse-‹e›-ncc</td><td>Network connectivity config</td><td>Five private endpoint rules: storage blob, dfs and queue, key vault, SQL server.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>px-lakehouse-‹e›-network-policy</td><td>Network policy</td><td>Ingress: two IP addresses, and the deploy SP by identity. Egress: not restricted.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The admin group gets its metastore grant.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>px-lakehouse-keyvault</td><td>Secret scope</td><td>On the key vault. READ for the run-as SP (and in dev the engineers), MANAGE for the metastore admins. The plan takes away the MANAGE that Databricks gives the creator.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-keyvault</td><td>Secret scope</td><td>A Databricks object, one per workspace, with the same name in each. On the environment's key vault. READ for the run-as SP (and in dev the engineers), MANAGE for the metastore admins. The plan takes away the MANAGE that Databricks gives the creator.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_lakehouse_‹e›</code>.</td></tr>
       <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
@@ -1073,8 +1073,8 @@ const NETWORK = (() => {
       card(464, 412, 164, "az-pe", "sqlsrv-pe", "sqlServer", ["px-lakehouse-‹e›-sqlsrv-pe", "Private endpoint to the SQL server, here in westeurope. The server is in germanywestcentral."]),
       card(236, 530, 164, "az-nat", "NAT gateway", "on the public subnet", ["px-lakehouse-‹e›-nat", "Outbound traffic of the host subnet, from one static address."]),
       card(464, 530, 164, "az-dns", "Private DNS ×2", "linked to the VNet", ["Private DNS zones", "privatelink.azuredatabricks.net and privatelink.database.windows.net. The endpoints' records are in them."]),
-      card(712, 150, 152, "az-sa", "Storage account", "public endpoint, RBAC", ["pxlakehouse‹e›sa02", "No firewall. Classic clusters arrive by the service endpoint, serverless by the NCC endpoints."]),
-      card(712, 270, 152, "az-kv", "Key vault", "public endpoint, RBAC", ["px-lakehouse-‹e›-kv", "No firewall. Serverless arrives by the NCC endpoint. The control plane reads it for the secret scope."]),
+      card(712, 150, 152, "az-sa", "Storage account", "firewall, RBAC", ["pxlakehouse‹e›sa02", "Firewall: default deny. Classic clusters arrive by the service endpoint, serverless by the NCC endpoints, Unity Catalog as the access connector, the admins from their two addresses."]),
+      card(712, 270, 152, "az-kv", "Key vault", "firewall, RBAC", ["px-lakehouse-‹e›-kv", "Firewall: default deny; trusted Microsoft services and the admins' two addresses get in. Serverless arrives by the NCC endpoint. The control plane reads it for the secret scope."]),
       card(712, 412, 152, "az-sqlsrv", "SQL server", "public access off", ["px-lakehouse-‹e›-sqlsrv", "Reachable only through its private endpoints: sqlsrv-pe and the NCC's."]),
     ],
   };
@@ -1122,7 +1122,7 @@ const ACCESS = (() => {
       card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-‹e›-sqlsrv", "Made by px-lakehouse-data's scripts/sql-access.sh with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
       card(c4, 198, "az-app", "SQL SP", "client secret", ["px-lakehouse-‹e›-sql-sp", "Only db_datareader: whoever reads the secret scope can act as it."]),
       card(c1, 278, "az-group", "Run-as SP, admins", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. In dev, engineers: READ. Metastore admins: MANAGE. The creator's own MANAGE is deleted."]),
-      card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "Backed by the environment's key vault. Made by the environment plan."]),
+      card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "A Databricks object, one per workspace, with the same name in each. Backed by the environment's key vault. Made by the environment plan."]),
       card(c4, 278, "az-ent", "AzureDatabricks", "first-party app", ["AzureDatabricks", "Databricks reads the key vault as this app for every key vault-backed secret scope."]),
       card(c5, 278, "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC, not access policies: changing the vault does not give its secrets."], 144, 144),
       card(c1, 378, "az-group", "Key vault managers", "Entra group", ["px-lakehouse-‹e›-keyvault-managers", "Manage and renew the secrets, such as the SQL SP's client secret."]),
