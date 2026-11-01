@@ -9,6 +9,8 @@ module "user_management" {
   admin_user_names      = ["bas.hilgers@outlook.com"]
   # Entra ID object IDs: bas.hilgers@outlook.com
   group_owner_object_ids = ["c0071a22-3f84-4337-ad09-871f52c3a1ba"]
+  # The first members of those groups and of the key vault managers, so a build needs no step by hand
+  group_member_object_ids = ["c0071a22-3f84-4337-ad09-871f52c3a1ba"]
   environments = {
     d = {
       admin_user_names             = ["bas.hilgers@outlook.com"]

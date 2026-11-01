@@ -49,3 +49,9 @@ variable "github_owner" {
   type        = string
   description = "GitHub account that owns the repositories in environments; the GitHub provider's token (GITHUB_TOKEN) must administer them"
 }
+
+variable "group_member_object_ids" {
+  type        = list(string)
+  default     = []
+  description = "Entra ID object IDs of the users who are the first members of the persona and key vault manager groups, when they are created; after that, membership is managed in Entra ID"
+}

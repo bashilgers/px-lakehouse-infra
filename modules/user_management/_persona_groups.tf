@@ -35,8 +35,10 @@ resource "azuread_group" "px_persona" {
   security_enabled        = true
   prevent_duplicate_names = true
   owners                  = var.group_owner_object_ids
+  members                 = var.group_member_object_ids
 
-  # Membership is managed in Entra ID, not in this code
+  # Membership is managed in Entra ID, not in this code: the members above are
+  # only the first ones
   lifecycle {
     ignore_changes = [members]
   }
