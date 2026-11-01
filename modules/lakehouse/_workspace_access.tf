@@ -37,18 +37,31 @@ data "databricks_service_principal" "px_run_sp" {
   display_name = "${var.app_name}-${var.env}-run-sp"
 }
 
-# Look up persona group in entra id and in the databricks account, where
-# user_management makes it linked to the entra group
+# Look up persona group in entra id (user_management), and resolve it into the
+# Databricks account: reading the external group provisions it there the first
+# time, as automatic identity management doesn't until a group is used
 data "azuread_group" "px_persona" {
   for_each         = local.persona_entitlements
   display_name     = "${var.app_name}-${var.env}-${each.key}"
   security_enabled = true
 }
 
-data "databricks_group" "px_persona" {
+data "databricks_account_iam_external_group_v2" "px_persona" {
+  for_each = local.persona_entitlements
+  provider = databricks.account
+  name     = "accounts/${var.databricks_account_id}/external-groups/${data.azuread_group.px_persona[each.key].object_id}"
+}
+
+# Manage the resolved group, so a destroy deletes it: nothing else would when
+# its entra group goes, and the next build's group of the same name would
+# clash with it. Automatic identity management refuses to create one through
+# this resource, so the plan imports the resolved one (its import block is in
+# plans/<env>/main.tf, as import blocks live in the root module).
+resource "databricks_group" "px_persona" {
   for_each     = local.persona_entitlements
   provider     = databricks.account
   display_name = data.azuread_group.px_persona[each.key].display_name
+  external_id  = data.azuread_group.px_persona[each.key].object_id
 }
 
 # Give the environment's admin group access to its own workspace only
@@ -88,7 +101,7 @@ resource "databricks_mws_permission_assignment" "px_persona" {
   for_each     = local.persona_entitlements
   provider     = databricks.account
   workspace_id = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
-  principal_id = data.databricks_group.px_persona[each.key].id
+  principal_id = databricks_group.px_persona[each.key].id
   permissions  = ["USER"]
 }
 
@@ -98,7 +111,7 @@ resource "databricks_mws_permission_assignment" "px_persona" {
 resource "databricks_entitlements" "px_persona" {
   for_each              = local.persona_entitlements
   provider              = databricks.workspace
-  group_id              = data.databricks_group.px_persona[each.key].id
+  group_id              = databricks_group.px_persona[each.key].id
   workspace_access      = each.value.workspace_access
   databricks_sql_access = each.value.databricks_sql_access
 
