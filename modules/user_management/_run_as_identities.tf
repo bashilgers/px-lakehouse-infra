@@ -1,10 +1,10 @@
 # ===================================================================
-# Run-as Service Principles for Databricks Jobs (one per environment)
+# Run-as Service Principals for Databricks Jobs (one per environment)
 # ===================================================================
 # The environment's jobs and pipelines run as this one; nothing logs in as it.
 # It has no secret, no federated credential and no Azure roles: Databricks runs
 # jobs as it without any. Its data access is granted in px-lakehouse-data.
-# Replaces px-lakehouse-sp (_service_principles.tf).
+# Replaces px-lakehouse-sp (_service_principals.tf).
 
 # Create app in app registry per environment
 resource "azuread_application_registration" "px_run_sp" {
@@ -13,13 +13,13 @@ resource "azuread_application_registration" "px_run_sp" {
   description  = "Run-as identity of the ${each.key} Databricks jobs and pipelines"
 }
 
-# Grab client_id of app and create service principle per environment
+# Grab client_id of app and create service principal per environment
 resource "azuread_service_principal" "px_run_sp" {
   for_each  = var.environments
   client_id = azuread_application_registration.px_run_sp[each.key].client_id
 }
 
-# Register run-as service principle in databricks account
+# Register run-as service principal in databricks account
 resource "databricks_service_principal" "px_run_sp" {
   for_each       = var.environments
   provider       = databricks.account
@@ -31,7 +31,7 @@ resource "databricks_service_principal" "px_run_sp" {
   disable_as_user_deletion = false
 }
 
-# Let the environment's deploy service principle deploy jobs that run as it
+# Let the environment's deploy service principal deploy jobs that run as it
 # (Service Principal User), and the metastore admins, the admin users' group,
 # manage it. Authoritative: these are all its roles, so the manager role
 # Databricks gives its creator is taken away.

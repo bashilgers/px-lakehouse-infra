@@ -214,8 +214,7 @@
 <h2 id="commands">2. Commands</h2>
 <p>The full build, from the repository root. Section 4 explains each step.</p>
 <div class="card">
-<pre><code>export TF_VAR_azure_client_id="" TF_VAR_azure_client_secret=""
-export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97
+<pre><code>export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97
 
 plans/terraform_state/bootstrap.sh                 # 1. first time only; later: init and apply
 for p in user_management unity_catalog_metastore; do  # 2. and 3.
@@ -239,10 +238,9 @@ terraform -chdir=plans/user_management destroy</code></pre>
 <div class="card">
   <ul class="plain">
     <li>Log in with <code>az login</code>. Your account must be Owner of the three subscriptions and a Databricks account admin. Step 4 also uses the Azure CLI to approve private endpoints.</li>
-    <li>Set these variables for every Terraform run. The plans then use your login, not a service principal.</li>
+    <li>Set the tenant for every Terraform run: without it the Databricks account provider asks the Azure CLI for tenant "common" and fails. The plans use your login.</li>
   </ul>
-<pre><code>export TF_VAR_azure_client_id="" TF_VAR_azure_client_secret=""
-export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
+<pre><code>export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <ul class="plain">
     <li>Each provider copy is about 350 MB. Set <code>TF_PLUGIN_CACHE_DIR</code> to keep one copy for all plans.</li>
   </ul>
@@ -414,7 +412,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-metastore-admins</code></td><td>Databricks account group, people only</td><td>–</td><td>Owns the metastore, its root credential, and each environment's storage and service credential. Manages the run-as SPs. USER on each workspace, with MANAGE on its secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-admins</code></td><td>Databricks account group: the admin users and the environment's deploy SP</td><td>–</td><td>USER on its own workspace. Owns what px-lakehouse-data makes. CREATE CATALOG, CONNECTION and EXTERNAL LOCATION on the metastore. CREATE EXTERNAL LOCATION on the storage credential. No ACL on the secret scope.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-engineers</code>, <code>-readers</code>, <code>-support</code></td><td>Entra groups. The environment plan resolves them into the account.</td><td>Entra ID, from an allowed address</td><td>USER on the workspace, with the entitlements and grants below. Engineers are also Reader on the resource group, to see its resources in the portal. Their members are set in Entra ID, not in the code. Prod has no engineers group.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-keyvault-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg><code>px-lakehouse-‹e›-kv-managers</code></td><td>Entra group</td><td>Azure portal</td><td>Key Vault Secrets Officer and Reader on the key vault. They renew the secrets, such as the SQL SP's.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-deploy-sp</code></td><td>Entra app, Databricks service principal</td><td>GitHub Actions through OIDC. No secret.</td><td>Member of the environment admin group. Workspace and Databricks SQL entitlements. Writes its own state container only. Service Principal User on the run-as SP, so it can deploy jobs that run as it.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-run-sp</code></td><td>Entra app, Databricks service principal</td><td>Nobody. Jobs run as it. No secret.</td><td>Grants per schema. ACCESS on the SQL service credential. READ on the secret scope. No Azure roles.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg><code>px-lakehouse-‹e›-sql-sp</code></td><td>Entra app</td><td>Client secret, made by px-lakehouse-data's <code>scripts/sql-access.sh</code>, in the key vault</td><td>db_datareader in the SQL database, for the federation connection. Not in Databricks, no Azure roles. Whoever reads the secret scope can act as it, so it only reads.</td></tr>
@@ -459,9 +457,9 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>catalog</code></td><td>External location <code>px_lakehouse_‹e›_exloc_catalog</code>, managed storage of catalog <code>px_ucc_lakehouse_‹e›</code></td><td>Every table. Schemas audit, metadata, bronze, silver and gold.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Containers <code>bronze</code>, <code>silver</code>, <code>gold</code></td><td>None</td><td>Not used by Unity Catalog. The layers are schemas in the catalog.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Foreign catalog <code>px_fed_lakehouse_sqlsrv_‹e›</code> to read. Service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>Key vault <code>px-lakehouse-‹e›-kv</code></td><td>Secret scope <code>px-lakehouse-keyvault</code></td><td>Secrets of the connections and jobs, such as <code>px-lakehouse-d-sql-sp-client-secret</code>.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>Key vault <code>px-lakehouse-‹e›-kv</code></td><td>Secret scope <code>px-lakehouse-kv</code></td><td>Secrets of the connections and jobs, such as <code>px-lakehouse-d-sql-sp-client-secret</code>.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>metastore</code> in <code>pxlakehouseucsa02</code></td><td>Metastore root</td><td>Managed data at metastore level. The catalogs keep their own storage.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-data</code>, <code>-data-t</code>, <code>-data-p</code>: one per deploy SP.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-‹e›-data</code>: px-lakehouse-data, one per deploy SP.</td></tr>
     </tbody>
   </table>
 </div>
@@ -492,7 +490,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-pl"/></svg>px-lakehouse-‹e›-ncc</td><td>Network connectivity config</td><td>Five private endpoint rules: storage blob, dfs and queue, key vault, SQL server.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>px-lakehouse-‹e›-network-policy</td><td>Network policy</td><td>Ingress: two IP addresses, and the deploy SP by identity. Egress: not restricted.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Workspace access</td><td>Assignments, entitlements, grants</td><td>The admin group, the deploy and run-as SPs and the persona groups are assigned. The admin group gets its metastore grant.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-keyvault</td><td>Secret scope</td><td>A Databricks object, one per workspace, with the same name in each. On the environment's key vault. READ for the run-as SP (and in dev the engineers), MANAGE for the metastore admins. The plan takes away the MANAGE that Databricks gives the creator.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-kv</td><td>Secret scope</td><td>A Databricks object, one per workspace, with the same name in each. On the environment's key vault. READ for the run-as SP (and in dev the engineers), MANAGE for the metastore admins. The plan takes away the MANAGE that Databricks gives the creator.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#x-shield"/></svg>Workspace settings</td><td>Workspace conf, default namespace</td><td>Tokens off, Git allow list, visibility controls. Default catalog <code>px_ucc_lakehouse_‹e›</code>.</td></tr>
       <tr><th colspan="3">plans/unity_catalog_metastore · prod subscription, resource group <code>px-lakehouse-uc-rg</code></th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-uc-dbr-metastore</td><td>Unity Catalog metastore</td><td>westeurope, one per region. Owner <code>px-lakehouse-metastore-admins</code>. Root <code>abfss://metastore@pxlakehouseucsa02</code>.</td></tr>
@@ -502,7 +500,7 @@ export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>pxlakehousetfstatesa</td><td>Storage account</td><td>Entra ID only (no shared keys), TLS 1.2, versioning. Deleted blobs and containers kept 30 days. <code>prevent_destroy</code>. Four containers, one per writer.</td></tr>
       <tr><th colspan="3">plans/user_management · Entra ID and the Databricks account</th></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-app"/></svg>App registrations</td><td>Entra apps and service principals</td><td>Per environment: deploy SP (with GitHub federated credentials and its state role), run-as SP, SQL SP. Also <code>px-lakehouse-sp</code>, retired.</td></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Entra groups</td><td>Security groups</td><td>Per environment: engineers (not in prod), readers, support and keyvault-managers. Members are not in the code.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Entra groups</td><td>Security groups</td><td>Per environment: engineers (not in prod), readers, support and kv-managers. Members are not in the code.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-group"/></svg>Account groups</td><td>Databricks groups</td><td><code>px-lakehouse-‹e›-admins</code> and <code>px-lakehouse-metastore-admins</code>, with their members.</td></tr>
     </tbody>
   </table>
@@ -1003,7 +1001,7 @@ const OVERVIEW = (() => {
       card(44, row(5), "az-pe", "Private endpoints", "workspace · SQL", ["Private endpoints", "px-lakehouse-‹e›-dbr-pe: workspace back end.<br>px-lakehouse-‹e›-sqlsrv-pe: SQL server."]),
       card(44, row(6), "az-dns", "Private DNS zones", "databricks · database", ["Private DNS zones", "privatelink.azuredatabricks.net<br>privatelink.database.windows.net<br>Both linked to the VNet."]),
       card(210, row(0), "az-sa", "Storage account", "ADLS · 5 containers", ["pxlakehouse‹e›sa02", "ADLS Gen2, Standard LRS. Containers landing, catalog, bronze, silver, gold."]),
-      card(210, row(1), "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC. Soft delete 7 days. Behind the secret scope px-lakehouse-keyvault."]),
+      card(210, row(1), "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC. Soft delete 7 days. Behind the secret scope px-lakehouse-kv."]),
       card(210, row(2), "az-sqlsrv", "SQL server", "germanywestcentral", ["px-lakehouse-‹e›-sqlsrv", "germanywestcentral: westeurope refuses new SQL servers. Entra ID logins only. Public access off."]),
       card(210, row(3), "az-sqldb", "SQL database", "serverless, pauses", ["px-lakehouse-‹e›-sqldb", "Serverless GP_S_Gen5_1: 0.5 to 1 vCore, pauses after 60 minutes, 10 GB."]),
       card(210, row(4), "az-adf", "Data Factory", "empty for now", ["px-lakehouse-‹e›-adf", "No pipelines or network settings in the code yet."]),
@@ -1013,7 +1011,7 @@ const OVERVIEW = (() => {
       card(376, 489, "az-sa", "DBFS storage", "pxlakehouse‹e›dbfs", ["pxlakehouse‹e›dbfs", "The workspace's root storage. Databricks manages it."]),
       card(622, 86, "az-app", "App registrations", "deploy, run-as, SQL ×3", ["App registrations", "Per environment: deploy SP, run-as SP and SQL SP. Also px-lakehouse-sp, retired."], 170),
       card(802, 86, "az-user", "Admin user", "Owner of 3 subscriptions", ["Admin user", "Owner of the 3 subscriptions, Databricks account admin. Its other rights come through groups: the platform admins are Entra admin of the SQL servers."], 170),
-      card(622, 130, "az-group", "Groups", "personas ×8, KV mgrs ×3", ["Entra groups", "px-lakehouse-‹e›-engineers (not prod), -readers, -support (8)<br>px-lakehouse-‹e›-keyvault-managers (3)<br>px-lakehouse-platform-admins (1, from terraform_state)<br>Members are set in Entra ID, not in the code, except the platform admins'."], 170),
+      card(622, 130, "az-group", "Groups", "personas ×8, KV mgrs ×3", ["Entra groups", "px-lakehouse-‹e›-engineers (not prod), -readers, -support (8)<br>px-lakehouse-‹e›-kv-managers (3)<br>px-lakehouse-platform-admins (1, from terraform_state)<br>Members are set in Entra ID, not in the code, except the platform admins'."], 170),
       card(802, 130, "az-ent", "AzureDatabricks", "reads the key vaults", ["AzureDatabricks", "First-party app. Key Vault Secrets User on each key vault, for the secret scope."], 170),
       card(622, 230, "az-group", "Account groups", "Entra personas, admins", ["Account groups", "px-lakehouse-‹e›-admins: admin users and the deploy SP.<br>px-lakehouse-metastore-admins: people only.<br>The persona groups, resolved from Entra ID by the environment plans."], 170),
       card(802, 230, "az-app", "Service principals", "deploy, run-as ×3", ["Service principals", "px-lakehouse-‹e›-deploy-sp and px-lakehouse-‹e›-run-sp, registered from Entra ID."], 170),
@@ -1122,10 +1120,10 @@ const ACCESS = (() => {
       card(c3, 198, "az-dbr", "Connection", "OAuth M2M", ["px-lakehouse-‹e›-sqlsrv", "Made by px-lakehouse-data's scripts/sql-access.sh with the client secret, then adopted by Terraform. Terraform never holds the secret."]),
       card(c4, 198, "az-app", "SQL SP", "client secret", ["px-lakehouse-‹e›-sql-sp", "Only db_datareader: whoever reads the secret scope can act as it."]),
       card(c1, 278, "az-group", "Run-as SP, admins", "READ, MANAGE", ["Secret scope ACLs", "Run-as SP: READ. In dev, engineers: READ. Metastore admins: MANAGE. The creator's own MANAGE is deleted."]),
-      card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-keyvault", ["px-lakehouse-keyvault", "A Databricks object, one per workspace, with the same name in each. Backed by the environment's key vault. Made by the environment plan."]),
+      card(c2, 278, "az-dbr", "Secret scope", "px-lakehouse-kv", ["px-lakehouse-kv", "A Databricks object, one per workspace, with the same name in each. Backed by the environment's key vault. Made by the environment plan."]),
       card(c4, 278, "az-ent", "AzureDatabricks", "first-party app", ["AzureDatabricks", "Databricks reads the key vault as this app for every key vault-backed secret scope."]),
       card(c5, 278, "az-kv", "Key vault", "Azure RBAC", ["px-lakehouse-‹e›-kv", "Azure RBAC, not access policies: changing the vault does not give its secrets."], 144, 144),
-      card(c1, 378, "az-group", "Key vault managers", "Entra group", ["px-lakehouse-‹e›-keyvault-managers", "Manage and renew the secrets, such as the SQL SP's client secret."]),
+      card(c1, 378, "az-group", "Key vault managers", "Entra group", ["px-lakehouse-‹e›-kv-managers", "Manage and renew the secrets, such as the SQL SP's client secret."]),
       card(c1, 440, "az-app", "Deploy SP", "GitHub Actions, OIDC", ["px-lakehouse-‹e›-deploy-sp", "Writes its own environment's Terraform state only. In Databricks it is a member of the environment admin group."]),
       card(c5, 440, "az-sa", "State container", "its own only", ["pxlakehousetfstatesa", "Containers px-lakehouse-data, -data-t and -data-p, one per deploy SP."], 144),
     ],

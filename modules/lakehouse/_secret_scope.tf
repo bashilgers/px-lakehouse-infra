@@ -5,7 +5,7 @@
 # Creating a key vault-backed scope takes an Entra ID login that may change
 # the key vault (Key Vault Contributor, Contributor or Owner): Databricks
 # writes to it as the scope's creator. px-lakehouse-data's deploy service
-# principle has no role on the key vault, so the scope is here. Every ACL is
+# principal has no role on the key vault, so the scope is here. Every ACL is
 # listed. Workspace admins manage every scope anyway, without an ACL.
 
 # Look up whoever applies this plan, the scope's creator. Read once the
@@ -18,7 +18,7 @@ data "databricks_current_user" "px_me" {
 # Create key vault-backed secret scope
 resource "databricks_secret_scope" "px_secret_scope" {
   provider = databricks.workspace
-  name     = "${var.app_name}-keyvault"
+  name     = "${var.app_name}-kv"
 
   keyvault_metadata {
     resource_id = azurerm_key_vault.px_key_vault.id
@@ -30,7 +30,7 @@ resource "databricks_secret_scope" "px_secret_scope" {
 }
 
 # Let the metastore admins manage the scope: a group of the admin users, not
-# the environment's admin group, which holds its deploy service principle
+# the environment's admin group, which holds its deploy service principal
 resource "databricks_secret_acl" "px_secret_scope_managers" {
   provider   = databricks.workspace
   scope      = databricks_secret_scope.px_secret_scope.name
@@ -69,19 +69,9 @@ resource "terraform_data" "px_secret_scope_creator_removal" {
   depends_on = [databricks_secret_acl.px_secret_scope_managers]
 }
 
-# Forget the creator's ACL that this plan used to list, without deleting it
-# here: the removal above deletes it, after the group's MANAGE is in
-removed {
-  from = databricks_secret_acl.px_secret_scope_creator
-
-  lifecycle {
-    destroy = false
-  }
-}
-
-# Let the run-as service principle and the other secret readers read the
+# Let the run-as service principal and the other secret readers read the
 # secrets. Nobody else gets an ACL: whoever can read the scope has the SQL
-# service principle's secret, and whoever manages it can read it.
+# service principal's secret, and whoever manages it can read it.
 resource "databricks_secret_acl" "px_secret_scope_readers" {
   for_each   = toset(concat([data.databricks_service_principal.px_run_sp.application_id], var.secret_readers))
   provider   = databricks.workspace

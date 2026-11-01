@@ -22,7 +22,7 @@ data "databricks_user" "px_admins" {
 # Environment Admin Groups (one per environment)
 # ===================================================================
 # Owns what px-lakehouse-data creates in the environment. Its members are the
-# environment's admin users and its deploy service principle, which is in no
+# environment's admin users and its deploy service principal, which is in no
 # other environment's group, so CI for one environment can't change another's.
 
 # Create admin group in databricks account per environment
@@ -40,7 +40,7 @@ resource "databricks_group_member" "px_env_admins_users" {
   member_id = data.databricks_user.px_admins[each.value.user].id
 }
 
-# Add environment's deploy service principle to its group
+# Add environment's deploy service principal to its group
 resource "databricks_group_member" "px_env_admins_deploy_sp" {
   for_each  = var.environments
   provider  = databricks.account
@@ -52,7 +52,7 @@ resource "databricks_group_member" "px_env_admins_deploy_sp" {
 # Metastore Admin Group
 # ===================================================================
 # Owns the metastore, which makes its members metastore admins. Humans only:
-# the deploy service principles are in the admin groups above, and CI must not
+# the deploy service principals are in the admin groups above, and CI must not
 # become metastore admin.
 
 # Create metastore admin group in databricks account

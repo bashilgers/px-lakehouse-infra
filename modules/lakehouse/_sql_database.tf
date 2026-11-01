@@ -143,7 +143,7 @@ resource "databricks_workspace_binding" "px_sql_credential" {
   binding_type   = "BINDING_TYPE_READ_WRITE"
 }
 
-# Let the run-as service principle and the other sql writers act as the access
+# Let the run-as service principal and the other sql writers act as the access
 # connector's identity
 resource "databricks_grant" "px_sql_credential_writers" {
   for_each   = toset(concat([data.databricks_service_principal.px_run_sp.application_id], var.sql_writers))
