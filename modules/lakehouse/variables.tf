@@ -68,20 +68,6 @@ variable "default_catalog_name" {
 }
 
 # ===================================================================
-# Service Principles
-# ===================================================================
-
-variable "azure_client_id" {
-  type        = string
-  description = "Application ID of the service principle registered in Azure"
-}
-
-variable "azure_client_secret" {
-  type        = string
-  description = "Application secret of the service principle registered in Databricks Accounts"
-}
-
-# ===================================================================
 # Networking
 # ===================================================================
 
@@ -133,7 +119,7 @@ variable "azure_databricks_object_id" {
 variable "secret_readers" {
   type        = list(string)
   default     = []
-  description = "Principals beside the run-as service principle with READ on the secret scope: service principals by application ID, groups by name"
+  description = "Principals beside the run-as service principal with READ on the secret scope: service principals by application ID, groups by name"
 }
 
 # ===================================================================
@@ -153,5 +139,5 @@ variable "platform_admins_group_name" {
 variable "sql_writers" {
   type        = list(string)
   default     = []
-  description = "Principals beside the run-as service principle with ACCESS on the SQL service credential, to write to the database as its identity: service principals by application ID, groups by name"
+  description = "Principals beside the run-as service principal with ACCESS on the SQL service credential, to write to the database as its identity: service principals by application ID, groups by name"
 }

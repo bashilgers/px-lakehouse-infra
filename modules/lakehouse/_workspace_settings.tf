@@ -3,7 +3,7 @@
 # ===================================================================
 # The workspace's admin settings, by their workspace-conf keys (read one with
 # `databricks workspace-conf get-status <key>`). Setting them takes a workspace
-# admin, which the deploy service principle is not, so they are here and not in
+# admin, which the deploy service principal is not, so they are here and not in
 # px-lakehouse-data. Keys not listed keep their value. Taking a key out does not
 # leave it as it is: the provider resets it, a true/false key to false and any
 # other to empty, and destroying the resource resets them all.

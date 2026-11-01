@@ -3,8 +3,6 @@ module "lakehouse" {
   subscription_id                          = "3e6ff8b5-2c9b-48bb-b5fb-6b513b3e1dab"
   unity_catalog_metastore_name             = "px-lakehouse-uc-dbr-metastore"
   databricks_account_id                    = "29c54faf-2e22-47d0-b2bb-f894c93010d2"
-  azure_client_id                          = var.azure_client_id
-  azure_client_secret                      = var.azure_client_secret
   env                                      = "t"
   app_name                                 = "px-lakehouse"
   location                                 = "westeurope"

@@ -42,16 +42,3 @@ variable "allowed_ip_addresses" {
   description = "IPv4 addresses (CIDR) of the admins, allowed to reach the metastore's storage account"
 }
 
-# ===================================================================
-# Service Principles
-# ===================================================================
-
-variable "azure_client_id" {
-  type        = string
-  description = "Application ID of the service principle registered in Azure"
-}
-
-variable "azure_client_secret" {
-  type        = string
-  description = "Application secret of the service principle registered in Databricks Accounts"
-}

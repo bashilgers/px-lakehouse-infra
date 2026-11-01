@@ -28,7 +28,7 @@ resource "azurerm_databricks_access_connector" "uc_access_connector" {
 
 # Make the access connector the metastore's root credential, through the
 # account API, so this plan needs no workspace. Owned by the metastore admins,
-# not a group with deploy service principles: whoever owns it can reach all
+# not a group with deploy service principals: whoever owns it can reach all
 # data the access connector can. The provider can't change it once created
 # ("doesn't support update"), so its owner is set here from the start.
 resource "databricks_metastore_data_access" "uc_root_credential" {

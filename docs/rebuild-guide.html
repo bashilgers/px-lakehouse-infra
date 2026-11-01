@@ -214,8 +214,7 @@
 <h2 id="commands">2. Commands</h2>
 <p>The full build, from the repository root. Section 4 explains each step.</p>
 <div class="card">
-<pre><code>export TF_VAR_azure_client_id="" TF_VAR_azure_client_secret=""
-export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97
+<pre><code>export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97
 
 plans/terraform_state/bootstrap.sh                 # 1. first time only; later: init and apply
 for p in user_management unity_catalog_metastore; do  # 2. and 3.
@@ -239,10 +238,9 @@ terraform -chdir=plans/user_management destroy</code></pre>
 <div class="card">
   <ul class="plain">
     <li>Log in with <code>az login</code>. Your account must be Owner of the three subscriptions and a Databricks account admin. Step 4 also uses the Azure CLI to approve private endpoints.</li>
-    <li>Set these variables for every Terraform run. The plans then use your login, not a service principal.</li>
+    <li>Set the tenant for every Terraform run: without it the Databricks account provider asks the Azure CLI for tenant "common" and fails. The plans use your login.</li>
   </ul>
-<pre><code>export TF_VAR_azure_client_id="" TF_VAR_azure_client_secret=""
-export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
+<pre><code>export ARM_TENANT_ID=d782e4c4-3c47-405e-9ac6-7b76e8f4eb97</code></pre>
   <ul class="plain">
     <li>Each provider copy is about 350 MB. Set <code>TF_PLUGIN_CACHE_DIR</code> to keep one copy for all plans.</li>
   </ul>

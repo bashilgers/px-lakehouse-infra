@@ -1,5 +1,5 @@
 # ===================================================================
-# Deploy Service Principles for CI (one per environment)
+# Deploy Service Principals for CI (one per environment)
 # ===================================================================
 # GitHub Actions logs in as these through federated credentials, so there is
 # no secret to store or rotate. Each is in its own environment's admin group
@@ -13,13 +13,13 @@ resource "azuread_application_registration" "px_deploy_sp" {
   display_name = "${var.app_name}-${each.key}-deploy-sp"
 }
 
-# Grab client_id of app and create service principle per environment
+# Grab client_id of app and create service principal per environment
 resource "azuread_service_principal" "px_deploy_sp" {
   for_each  = var.environments
   client_id = azuread_application_registration.px_deploy_sp[each.key].client_id
 }
 
-# Let github actions log in as the deploy service principle
+# Let github actions log in as the deploy service principal
 resource "azuread_application_federated_identity_credential" "px_deploy_sp" {
   for_each = merge([
     for env, environment in var.environments : {
@@ -40,7 +40,7 @@ resource "azuread_application_federated_identity_credential" "px_deploy_sp" {
   audiences      = ["api://AzureADTokenExchange"]
 }
 
-# Let deploy service principle read and write its environment's terraform state only
+# Let deploy service principal read and write its environment's terraform state only
 resource "azurerm_role_assignment" "px_deploy_sp_state" {
   for_each             = { for env, environment in var.environments : env => environment if environment.terraform_state_container_id != null }
   provider             = azurerm.azurerm_prod
@@ -49,7 +49,7 @@ resource "azurerm_role_assignment" "px_deploy_sp_state" {
   principal_id         = azuread_service_principal.px_deploy_sp[each.key].object_id
 }
 
-# Register deploy service principle in databricks account
+# Register deploy service principal in databricks account
 resource "databricks_service_principal" "px_deploy_sp" {
   for_each       = var.environments
   provider       = databricks.account

@@ -1,5 +1,5 @@
 # ===================================================================
-# SQL Service Principles for Lakehouse Federation (one per environment)
+# SQL Service Principals for Lakehouse Federation (one per environment)
 # ===================================================================
 # The Databricks connection to the environment's SQL database logs in as this
 # one, with a client secret from the key vault behind the workspace's secret
@@ -14,7 +14,7 @@ resource "azuread_application_registration" "px_sql_sp" {
   description  = "Lakehouse Federation login to the ${each.key} SQL database, read-only"
 }
 
-# Grab client_id of app and create service principle per environment
+# Grab client_id of app and create service principal per environment
 resource "azuread_service_principal" "px_sql_sp" {
   for_each  = var.environments
   client_id = azuread_application_registration.px_sql_sp[each.key].client_id

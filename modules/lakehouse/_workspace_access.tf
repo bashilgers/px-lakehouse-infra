@@ -5,7 +5,7 @@
 # from user_management; this plan looks them up in the Databricks account and
 # assigns them to the workspace it creates, so neither plan waits for the
 # other. The workspace's users group has no entitlements, so being assigned
-# alone gives no access: the persona groups and the deploy service principle
+# alone gives no access: the persona groups and the deploy service principal
 # get their own. Workspace and account report the same principal IDs (identity
 # federation), so the entitlements use the account's.
 
@@ -21,7 +21,7 @@ locals {
 }
 
 # Look up the environment's admin group, the metastore admins and the run-as
-# service principle (user_management)
+# service principal (user_management)
 data "databricks_group" "px_env_admins" {
   provider     = databricks.account
   display_name = var.admins_group_name
@@ -69,7 +69,7 @@ resource "databricks_mws_permission_assignment" "px_metastore_admins" {
   permissions  = ["USER"]
 }
 
-# Give the deploy and run-as service principles access to the workspace
+# Give the deploy and run-as service principals access to the workspace
 resource "databricks_mws_permission_assignment" "px_deploy_sp" {
   provider     = databricks.account
   workspace_id = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
@@ -106,7 +106,7 @@ resource "databricks_entitlements" "px_persona" {
   depends_on = [databricks_mws_permission_assignment.px_persona]
 }
 
-# Give the deploy service principle both entitlements. It applies
+# Give the deploy service principal both entitlements. It applies
 # px-lakehouse-data's Terraform through the workspace's APIs, which refuse a
 # caller without the workspace or Databricks SQL entitlement.
 resource "databricks_entitlements" "px_deploy_sp" {

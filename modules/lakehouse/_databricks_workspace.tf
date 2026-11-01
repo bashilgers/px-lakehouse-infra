@@ -208,14 +208,14 @@ resource "azurerm_private_endpoint" "px_databricks_private_endpoint" {
 # Managed at account level, so a wrong ip range can be fixed from anywhere
 # through the account api, even when the workspace itself denies you.
 
-# Look up the environment's CI deploy service principle (managed in user_management)
+# Look up the environment's CI deploy service principal (managed in user_management)
 data "databricks_service_principal" "px_deploy_sp" {
   provider     = databricks.account
   display_name = "${var.app_name}-${var.env}-deploy-sp"
 }
 
 # Create network policy that only lets listed ip addresses and the deploy
-# service principle reach the workspace
+# service principal reach the workspace
 resource "databricks_account_network_policy" "px_network_policy" {
   provider          = databricks.account
   account_id        = var.databricks_account_id
@@ -238,7 +238,7 @@ resource "databricks_account_network_policy" "px_network_policy" {
         },
         {
           # CI runs on GitHub-hosted runners without stable IPs, so the deploy
-          # service principle is allowed by identity, for the api only
+          # service principal is allowed by identity, for the api only
           label = "deploy-sp-api"
           authentication = {
             identity_type = "IDENTITY_TYPE_SELECTED_IDENTITIES"
