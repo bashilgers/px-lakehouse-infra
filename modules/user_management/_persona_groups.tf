@@ -5,10 +5,12 @@
 # never one by one: engineers build and run the pipelines, readers query the
 # gold layer, support watches the loads. Their grants are in px-lakehouse-data.
 # Membership is managed in Entra ID, not here, and Databricks takes it from
-# there through automatic identity management. Each environment's lakehouse
-# plan resolves its groups into the Databricks account and assigns them to its
-# workspace. An environment has only the personas it lists: prod has no
-# engineers.
+# there through automatic identity management. The group's copy in the
+# Databricks account is made here too, linked to the Entra group by its object
+# ID, as automatic identity management would make it: a destroy then deletes
+# it, which a group resolved on first use outlives. Each environment's
+# lakehouse plan assigns its groups to its workspace. An environment has only
+# the personas it lists: prod has no engineers.
 
 locals {
   personas = {
@@ -33,9 +35,19 @@ resource "azuread_group" "px_persona" {
   security_enabled        = true
   prevent_duplicate_names = true
   owners                  = var.group_owner_object_ids
+  members                 = var.group_member_object_ids
 
-  # Membership is managed in Entra ID, not in this code
+  # Membership is managed in Entra ID, not in this code: the members above are
+  # only the first ones
   lifecycle {
     ignore_changes = [members]
   }
+}
+
+# Create the persona group in the databricks account, linked to its entra group
+resource "databricks_account_iam_group_v2" "px_persona" {
+  for_each    = local.env_personas
+  provider    = databricks.account
+  group_name  = azuread_group.px_persona[each.key].display_name
+  external_id = azuread_group.px_persona[each.key].object_id
 }
