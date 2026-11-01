@@ -9,7 +9,7 @@
 # Create security group in entra id per environment
 resource "azuread_group" "px_keyvault_managers" {
   for_each                = var.environments
-  display_name            = "${var.app_name}-${each.key}-keyvault-managers"
+  display_name            = "${var.app_name}-${each.key}-kv-managers"
   description             = "Key vault managers of ${var.app_name}-${each.key}: manage its key vault's secrets and renew them"
   security_enabled        = true
   prevent_duplicate_names = true

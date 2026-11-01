@@ -18,7 +18,7 @@ data "databricks_current_user" "px_me" {
 # Create key vault-backed secret scope
 resource "databricks_secret_scope" "px_secret_scope" {
   provider = databricks.workspace
-  name     = "${var.app_name}-keyvault"
+  name     = "${var.app_name}-kv"
 
   keyvault_metadata {
     resource_id = azurerm_key_vault.px_key_vault.id

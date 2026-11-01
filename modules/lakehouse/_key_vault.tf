@@ -5,7 +5,7 @@
 # access policies, whoever may change the key vault can give themselves its
 # secrets. Granting a role takes Owner or User Access Administrator.
 
-# Create basic keyvault resource, with azure rbac for its data
+# Create basic key vault resource, with azure rbac for its data
 resource "azurerm_key_vault" "px_key_vault" {
   name                        = "${var.app_name}-${var.env}-kv"
   resource_group_name         = azurerm_resource_group.px_rg.name
@@ -31,7 +31,7 @@ resource "azurerm_key_vault" "px_key_vault" {
 
 # Look up key vault managers group in entra id (user_management)
 data "azuread_group" "px_keyvault_managers" {
-  display_name     = "${var.app_name}-${var.env}-keyvault-managers"
+  display_name     = "${var.app_name}-${var.env}-kv-managers"
   security_enabled = true
 }
 
@@ -59,7 +59,7 @@ resource "azurerm_role_assignment" "px_key_vault_databricks_secrets_user" {
   principal_type       = "ServicePrincipal"
 }
 
-# Create private endpoint rule from serverless compute to keyvault
+# Create private endpoint rule from serverless compute to key vault
 resource "databricks_mws_ncc_private_endpoint_rule" "px_ncc_key_vault_private_endpoint_rule" {
   provider                       = databricks.account
   network_connectivity_config_id = databricks_mws_network_connectivity_config.px_ncc.network_connectivity_config_id
