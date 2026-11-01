@@ -459,7 +459,7 @@ terraform -chdir=plans/user_management destroy</code></pre>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sqldb"/></svg>SQL database <code>px-lakehouse-‹e›-sqldb</code></td><td>Foreign catalog <code>px_fed_lakehouse_sqlsrv_‹e›</code> to read. Service credential to write.</td><td>The PX Lakehouse DB.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-kv"/></svg>Key vault <code>px-lakehouse-‹e›-kv</code></td><td>Secret scope <code>px-lakehouse-kv</code></td><td>Secrets of the connections and jobs, such as <code>px-lakehouse-d-sql-sp-client-secret</code>.</td></tr>
       <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg>Container <code>metastore</code> in <code>pxlakehouseucsa02</code></td><td>Metastore root</td><td>Managed data at metastore level. The catalogs keep their own storage.</td></tr>
-      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-data</code>, <code>-data-t</code>, <code>-data-p</code>: one per deploy SP.</td></tr>
+      <tr><td><svg class="ti" aria-hidden="true"><use href="#az-sa"/></svg><code>pxlakehousetfstatesa</code></td><td>–</td><td>Terraform state. <code>px-lakehouse-infra</code>: every plan here. <code>px-lakehouse-‹e›-data</code>: px-lakehouse-data, one per deploy SP.</td></tr>
     </tbody>
   </table>
 </div>
