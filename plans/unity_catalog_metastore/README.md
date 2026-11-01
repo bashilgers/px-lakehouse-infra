@@ -1,13 +1,6 @@
 # Unity Catalog Metastore
 
-This module contains Terraform code used to create a Unity Catalog metastore on Azure.
-
-## Module Content
-
-This module performs the following tasks:
-
-- Creation of central resource group for Unity Catalog resources
-- Creation of central storage account for Unity Catalog metastore
-- Creation of Databricks access connector
-- Assignment of necessary permissions
-- Creation of Unity Catalog metastore resource with created storage account as storage root
+The region's Unity Catalog metastore, shared by every environment and owned by the metastore admins'
+group. It has no storage of its own: each environment's catalog has its own storage root, so there is no
+storage account, access connector or root credential here. Its destroy deletes it with whatever it still
+holds (`force_destroy`).
