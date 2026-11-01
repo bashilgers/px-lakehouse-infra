@@ -37,19 +37,18 @@ data "databricks_service_principal" "px_run_sp" {
   display_name = "${var.app_name}-${var.env}-run-sp"
 }
 
-# Look up persona group in entra id (user_management), and resolve it into the
-# Databricks account: reading the external group provisions it there the first
-# time, as automatic identity management doesn't until a group is used
+# Look up persona group in entra id and in the databricks account, where
+# user_management makes it linked to the entra group
 data "azuread_group" "px_persona" {
   for_each         = local.persona_entitlements
   display_name     = "${var.app_name}-${var.env}-${each.key}"
   security_enabled = true
 }
 
-data "databricks_account_iam_external_group_v2" "px_persona" {
-  for_each = local.persona_entitlements
-  provider = databricks.account
-  name     = "accounts/${var.databricks_account_id}/external-groups/${data.azuread_group.px_persona[each.key].object_id}"
+data "databricks_group" "px_persona" {
+  for_each     = local.persona_entitlements
+  provider     = databricks.account
+  display_name = data.azuread_group.px_persona[each.key].display_name
 }
 
 # Give the environment's admin group access to its own workspace only
@@ -89,7 +88,7 @@ resource "databricks_mws_permission_assignment" "px_persona" {
   for_each     = local.persona_entitlements
   provider     = databricks.account
   workspace_id = azurerm_databricks_workspace.px_databricks_workspace.workspace_id
-  principal_id = data.databricks_account_iam_external_group_v2.px_persona[each.key].internal_id
+  principal_id = data.databricks_group.px_persona[each.key].id
   permissions  = ["USER"]
 }
 
@@ -99,7 +98,7 @@ resource "databricks_mws_permission_assignment" "px_persona" {
 resource "databricks_entitlements" "px_persona" {
   for_each              = local.persona_entitlements
   provider              = databricks.workspace
-  group_id              = data.databricks_account_iam_external_group_v2.px_persona[each.key].internal_id
+  group_id              = data.databricks_group.px_persona[each.key].id
   workspace_access      = each.value.workspace_access
   databricks_sql_access = each.value.databricks_sql_access
 
@@ -116,4 +115,20 @@ resource "databricks_entitlements" "px_deploy_sp" {
   databricks_sql_access = true
 
   depends_on = [databricks_mws_permission_assignment.px_deploy_sp]
+}
+
+# Look up the deploy service principal in entra id (user_management)
+data "azuread_service_principal" "px_deploy_sp" {
+  display_name = "${var.app_name}-${var.env}-deploy-sp"
+}
+
+# Let the deploy service principal read the workspace resource: px-lakehouse-data
+# names its workspace by Azure resource ID, which stays the same through a
+# rebuild, and the Databricks provider reads the workspace URL from it. Reader
+# gives no rights in the workspace itself.
+resource "azurerm_role_assignment" "px_deploy_sp_workspace_reader" {
+  scope                = azurerm_databricks_workspace.px_databricks_workspace.id
+  role_definition_name = "Reader"
+  principal_id         = data.azuread_service_principal.px_deploy_sp.object_id
+  principal_type       = "ServicePrincipal"
 }

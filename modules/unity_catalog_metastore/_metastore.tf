@@ -7,6 +7,11 @@ resource "databricks_metastore" "uc_metastore" {
   # Owned by a humans-only group, whose members are the metastore admins
   owner = var.metastore_admins_group_name
 
+  # A destroy deletes it with what it still holds, such as the root location
+  # Databricks makes. Set from the start: the provider can't update a
+  # metastore (it sends a Delta Sharing token lifetime the API refuses).
+  force_destroy = true
+
   lifecycle {
     # Set outside this resource: the root credential is the data access below,
     # and the token lifetime is left at the account's default

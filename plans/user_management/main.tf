@@ -5,6 +5,7 @@ module "user_management" {
   subscription_id_test  = "3e6ff8b5-2c9b-48bb-b5fb-6b513b3e1dab"
   subscription_id_prod  = "138f27a5-cb36-412c-a9f0-9b1ba69e0d55"
   databricks_account_id = "29c54faf-2e22-47d0-b2bb-f894c93010d2"
+  github_owner          = "bashilgers"
   admin_user_names      = ["bas.hilgers@outlook.com"]
   # Entra ID object IDs: bas.hilgers@outlook.com
   group_owner_object_ids = ["c0071a22-3f84-4337-ad09-871f52c3a1ba"]
@@ -13,6 +14,7 @@ module "user_management" {
       admin_user_names             = ["bas.hilgers@outlook.com"]
       terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-d-data"
       github_repository            = "bashilgers/px-lakehouse-data"
+      github_environment           = "dev"
       # GitHub's immutable subject format: owner@owner-id/repo@repo-id. Only dev
       # trusts pull requests (_deploy_identities.tf)
       github_subjects = {
@@ -26,6 +28,7 @@ module "user_management" {
       # A container of its own: each holds one environment's state
       terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-t-data"
       github_repository            = "bashilgers/px-lakehouse-data"
+      github_environment           = "test"
       github_subjects = {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
         github-environment-test = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:environment:test"
@@ -36,6 +39,7 @@ module "user_management" {
       # A container of its own: each holds one environment's state
       terraform_state_container_id = "/subscriptions/138f27a5-cb36-412c-a9f0-9b1ba69e0d55/resourceGroups/px-lakehouse-tfstate-rg/providers/Microsoft.Storage/storageAccounts/pxlakehousetfstatesa/blobServices/default/containers/px-lakehouse-p-data"
       github_repository            = "bashilgers/px-lakehouse-data"
+      github_environment           = "prod"
       github_subjects = {
         github-main             = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:ref:refs/heads/main"
         github-environment-prod = "repo:bashilgers@34332095/px-lakehouse-data@1437225708:environment:prod"
