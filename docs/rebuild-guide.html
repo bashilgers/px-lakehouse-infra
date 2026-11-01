@@ -471,7 +471,7 @@ terraform -chdir=plans/user_management destroy</code></pre>
     <thead><tr><th>Name</th><th>Type</th><th>Settings</th></tr></thead>
     <tbody>
       <tr><th colspan="3">plans/dev, test, prod · resource group <code>px-lakehouse-‹e›-rg</code>, westeurope</th></tr>
-      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-‹e›-dbr</td><td>Databricks workspace</td><td>Premium. VNet injection, no public IP. Customer-managed keys enabled, but no key is set. Databricks makes the managed resource group <code>px-lakehouse-dbr-managed-‹e›-rg</code> with DBFS storage <code>pxlakehouse‹e›dbfs</code>.</td></tr>
+      <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-dbr"/></svg>px-lakehouse-‹e›-dbr</td><td>Databricks workspace</td><td>Premium. VNet injection, no public IP. Customer-managed keys enabled, but no key is set. Databricks makes the managed resource group <code>px-lakehouse-‹e›-dbr-managed-rg</code> with DBFS storage <code>pxlakehouse‹e›dbfs</code>.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-vnet"/></svg>px-lakehouse-‹e›-vnet</td><td>Virtual network</td><td>10.‹n›.0.0/16, three subnets (section 2).</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-nsg"/></svg>px-lakehouse-‹e›-nsg</td><td>Network security group</td><td>On both Databricks subnets. No rules of its own.</td></tr>
       <tr><td class="name"><svg class="ti" aria-hidden="true"><use href="#az-rt"/></svg>px-lakehouse-‹e›-rt</td><td>Route table</td><td>On both Databricks subnets. No routes.</td></tr>
@@ -975,7 +975,7 @@ const OVERVIEW = (() => {
     zones: [
       { x: 16, y: 40, w: 540, h: 500, kind: "sub stacked", stack: 2, icon: "az-sub", label: "Subscription per environment", sub: "dev, test and prod: one module, one plan each" },
       { x: 30, y: 88, w: 512, h: 388, kind: "rg", icon: "az-rg", label: "px-lakehouse-‹e›-rg", sub: "westeurope" },
-      { x: 30, y: 484, w: 512, h: 48, kind: "rg", icon: "az-rg", label: "px-lakehouse-dbr-managed-‹e›-rg", sub: "Databricks makes and locks it" },
+      { x: 30, y: 484, w: 512, h: 48, kind: "rg", icon: "az-rg", label: "px-lakehouse-‹e›-dbr-managed-rg", sub: "Databricks makes and locks it" },
       { x: 612, y: 40, w: 372, h: 136, kind: "sub", icon: "az-group", label: "Entra ID tenant", sub: "plans/user_management" },
       { x: 612, y: 196, w: 372, h: 128, kind: "dbx", icon: "az-dbr", label: "Databricks account" },
       { x: 612, y: 344, w: 372, h: 204, kind: "sub", icon: "az-sub", label: "Prod subscription", sub: "and the shared parts" },

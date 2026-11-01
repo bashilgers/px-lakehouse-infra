@@ -81,7 +81,7 @@ resource "azurerm_subnet_nat_gateway_association" "px_subnet_public_nat_gateway"
 # Create databricks workspace
 resource "azurerm_databricks_workspace" "px_databricks_workspace" {
   name                                  = "${var.app_name}-${var.env}-dbr"
-  managed_resource_group_name           = "${var.app_name}-dbr-managed-${var.env}-rg"
+  managed_resource_group_name           = "${var.app_name}-${var.env}-dbr-managed-rg"
   resource_group_name                   = azurerm_resource_group.px_rg.name
   location                              = azurerm_resource_group.px_rg.location
   sku                                   = "premium"
